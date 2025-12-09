@@ -6,3 +6,4 @@ link to thingspeak channel: https://thingspeak.mathworks.com/channels/3194176/pr
 github page to thingspeak arduino: https://github.com/mathworks/thingspeak-arduino  
 github page for heltec cubecell: https://github.com/HelTecAutomation/platform-heltec-cubecell 
 github repository for many basic arduino projects: https://github.com/Circuit-Digest/Basic-Arduino-Tutorials-for-Beginners-  
+streamlit cloud setup:    https://share.streamlit.io/?utm_source=streamlit&utm_medium=referral&utm_campaign=main&utm_content=-ss-streamlit-io-cloudpagehero
