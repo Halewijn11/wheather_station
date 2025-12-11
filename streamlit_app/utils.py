@@ -7,10 +7,12 @@ def get_google_sheet_df(base_url = "https://docs.google.com/spreadsheets/d/",
 
 def tidy_google_sheet_df(google_sheet_df, 
                          payload_data_cols = ["uplink_message_decoded_payload_field1", "uplink_message_decoded_payload_field2"],
-                         data_cols = ['received_at']):
+                         data_cols = ['received_at'],
+                         lora_signal_quality_cols = ['uplink_message_rx_metadata_0_rssi', 'uplink_message_rx_metadata_0_snr', 'uplink_message_rx_metadata_0_channel_rssi']):
     cols = []
     cols.extend(data_cols)
     cols.extend(payload_data_cols)
+    cols.extend(lora_signal_quality_cols)
     df = google_sheet_df.copy()
     df = df[cols]
 
