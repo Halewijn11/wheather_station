@@ -1,6 +1,7 @@
 # description
 
 # some usefull links
+link to the streamlit stie: https://wheatherstation-e9gurrh3q7eo7ik2g4dzda.streamlit.app/status   
 link to the things network: https://eu1.cloud.thethings.network/console/  
 link to thingspeak channel: https://thingspeak.mathworks.com/channels/3194176/private_show 
 github page to thingspeak arduino: https://github.com/mathworks/thingspeak-arduino  
