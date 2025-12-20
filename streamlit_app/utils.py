@@ -5,13 +5,20 @@ def get_google_sheet_df(base_url = "https://docs.google.com/spreadsheets/d/",
     df = pd.read_csv(f"{base_url}{sheet_id}/export?format=csv")
     return df
 
+def get_full_payload_colname(col_name):
+    return f"uplink_message_decoded_payload_{col_name}"
+
+# def get_metadata_google_sheet_col_name(col_name):
+#     return f"uplink_message_decoded_payload{col_name}"
+
 def tidy_google_sheet_df(google_sheet_df, 
-                         payload_data_cols = ["uplink_message_decoded_payload_field1", "uplink_message_decoded_payload_field2"],
+                         payload_data_col_name_list = ['pressure', 'temperature'],
                          data_cols = ['received_at'],
                          lora_signal_quality_cols = ['uplink_message_rx_metadata_0_rssi', 'uplink_message_rx_metadata_0_snr', 'uplink_message_rx_metadata_0_channel_rssi']):
     cols = []
+    payload_data_full_col_name_list = [get_full_payload_colname(payload_data_col_name) for payload_data_col_name in payload_data_col_name_list]
     cols.extend(data_cols)
-    cols.extend(payload_data_cols)
+    cols.extend(payload_data_full_col_name_list)
     cols.extend(lora_signal_quality_cols)
     df = google_sheet_df.copy()
     df = df[cols]

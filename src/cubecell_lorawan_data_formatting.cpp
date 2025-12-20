@@ -1,6 +1,8 @@
 #include "LoRaWan_APP.h"
 #include "Arduino.h"
+#include <Adafruit_BMP280.h>
 
+Adafruit_BMP280 bmp; // Create the sensor object
 /*
  * set LoraWan_RGB to Active,the RGB active in loraWan
  * RGB red means sending;
@@ -77,30 +79,58 @@ uint8_t appPort = 2;
 uint8_t confirmedNbTrials = 4;
 
 
-float temperature = 23.4;  // degrees Celsius
-float humidity = 55.0;     // percent
+// float temperature = 23.4;  // degrees Celsius
+// float humidity = 55.0;     // percent
 
 /* Prepares the payload of the frame */
 static void prepareTxFrame(uint8_t port)
-{
-    float temperature = 23.4;  // example constant
-    float humidity    = 55.0;  // example constant
+{   
+    float temp = bmp.readTemperature(); 
+    int press = bmp.readPressure();
 
-    // Convert temperature to signed int16 (temp × 10)
-    int16_t tempInt = (int16_t)(temperature * 10);
+	// 2. Print to Serial Monitor so you can see it on your PC
+    Serial.print("Sensor Temperature: ");
+    Serial.print(temp);
+    Serial.println(" *C");
 
-    // Convert humidity to uint8 (humidity × 2 gives 0.5% resolution)
-    uint8_t humInt = (uint8_t)(humidity * 2);
+    Serial.print("Sensor Pressure: ");
+    Serial.print(press);
+    Serial.println(" Pa");
 
-    // Prepare payload
-    appDataSize = 3;
-    appData[0] = (uint8_t)(tempInt >> 8);   // high byte
-    appData[1] = (uint8_t)(tempInt & 0xFF); // low byte
-    appData[2] = humInt;
+    int16_t tempInt = (int16_t)(temp * 100); 
+    int32_t pressInt = (uint32_t)(press);
+
+	// 2. Print to Serial Monitor so you can see it on your PC
+    Serial.print("Sensor Temperature that's going to be sent: ");
+    Serial.print(tempInt);
+    Serial.println(" *C");
+
+    Serial.print("Sensor Pressure that's going to be sent: ");
+    Serial.print(pressInt);
+    Serial.println(" Pa");
+
+	
+    appDataSize = 6; // <--- ADD THIS LINE!
+
+    appData[0] = (uint8_t)(tempInt >> 8);
+    appData[1] = (uint8_t)(tempInt & 0xFF);
+    
+    appData[2] = (uint8_t)(pressInt >> 24);
+    appData[3] = (uint8_t)(pressInt >> 16);
+    appData[4] = (uint8_t)(pressInt >> 8);
+    appData[5] = (uint8_t)(pressInt & 0xFF);
+	
 }
 
 void setup() {
 	boardInitMcu();
+
+	// Initialize the BMP280 sensor
+    if (!bmp.begin(0x76)) { // 0x76 is the common I2C address for BMP280
+        Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+        while (1);
+    }
+
 	Serial.begin(115200);
 #if(AT_SUPPORT)
 	enableAt();
