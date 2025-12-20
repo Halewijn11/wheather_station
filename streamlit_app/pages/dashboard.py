@@ -26,7 +26,7 @@ with col2:
             axis=alt.Axis(
                     labels=True,
                     ticks=True,
-                    title="rssi",
+                    title="Temperature (°C)",
                 ),
             scale=alt.Scale(domain=[
                 time_window_df[temperature_colname].min(),
@@ -56,7 +56,7 @@ with col2:
             axis=alt.Axis(
                     labels=True,
                     ticks=True,
-                    title="rssi",
+                    title="Pressure (hPa)",
                 ),
             scale=alt.Scale(domain=[
                 time_window_df[pressure_colname].min(),
