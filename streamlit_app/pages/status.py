@@ -20,7 +20,6 @@ google_sheet_df = utils.get_google_sheet_df()
 df = utils.tidy_google_sheet_df(google_sheet_df)
 last_measurement_string =  utils.get_last_measurement_string(df)
 time_window_df = df.tail(50)
-time_window_df.to_csv('delete.csv')
 # #--------------------- building the streamlit app -----------------------------
 # --- Top row ---
 # top_cols = st.columns(3)
