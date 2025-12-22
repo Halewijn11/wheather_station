@@ -2,18 +2,17 @@
 // green does the RPM measurement
 
 #include <Arduino.h>
+#include "Utils.h"
 
-const int fan_pwm_pin = 6;      // PWM control pin for the fan
-const int tach_pin    = 2;      // Tachometer signal input pin
+const int fan_pwm_pin = GPIO2;      // PWM control pin for the fan
+const int tach_pin    = GPIO3;      // Tachometer signal input pin
 
 volatile unsigned int pulse_count = 0; // Use unsigned int for pulse count
 unsigned long last_measure = 0;
 
 const int pulses_per_rev = 2;   // Most PC fans produce 2 pulses per revolution
 
-void counter() {
-  pulse_count++;                // Interrupt: happens on each tach pulse
-}
+void counter(); 
 
 void setup() {
   // Use a higher baud rate for faster serial communication
@@ -25,7 +24,8 @@ void setup() {
 
   // Set fan speed (0–255)
   // Ensure the fan is actually spinning. Try 255 (full speed) to confirm.
-  analogWrite(fan_pwm_pin, 128); 
+
+  analogWrite(fan_pwm_pin, 32000); 
 
   // Interrupt on tach pin
   attachInterrupt(digitalPinToInterrupt(tach_pin), counter, FALLING);
@@ -60,4 +60,9 @@ void loop() {
 
     last_measure = millis();
   }
+}
+
+
+void counter() {
+  pulse_count++;                // Interrupt: happens on each tach pulse
 }

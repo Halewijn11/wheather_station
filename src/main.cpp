@@ -102,6 +102,7 @@ static void prepareTxFrame(uint8_t port)
 {   
     float temp = bmp.readTemperature(); 
     int press = bmp.readPressure();
+    int fan_rpm = readFanSpeed();
 
 	// 2. Print to Serial Monitor so you can see it on your PC
     Serial.print("Sensor Temperature: ");
@@ -111,6 +112,12 @@ static void prepareTxFrame(uint8_t port)
     Serial.print("Sensor Pressure: ");
     Serial.print(press);
     Serial.println(" Pa");
+
+    Serial.print("Fan RPM: ");
+    Serial.print(fan_rpm);
+    Serial.println(" RPM");
+
+    
 
     int16_t tempInt = (int16_t)(temp * 100); 
     int32_t pressInt = (uint32_t)(press);
@@ -124,35 +131,66 @@ static void prepareTxFrame(uint8_t port)
     Serial.print(pressInt);
     Serial.println(" Pa");
 
-	
-    appDataSize = 6; // <--- ADD THIS LINE!
 
+
+	
+    appDataSize = 8; // <--- ADD THIS LINE!
+
+    //to send the temperature
     appData[0] = (uint8_t)(tempInt >> 8);
     appData[1] = (uint8_t)(tempInt & 0xFF);
-    
+    //to send the pressure
     appData[2] = (uint8_t)(pressInt >> 24);
     appData[3] = (uint8_t)(pressInt >> 16);
     appData[4] = (uint8_t)(pressInt >> 8);
     appData[5] = (uint8_t)(pressInt & 0xFF);
-	
+    //to send the fan speed
+    appData[6] = (uint8_t)(fan_rpm >> 8);
+    appData[7] = (uint8_t)(fan_rpm & 0xFF);
 }
 
 void setup() {
+  /****************************************************
+ * GENERAL SETUP  
+ ****************************************************/
+  Serial.begin(115200);
+
+  /****************************************************
+ * LORA MODULE SETUP  
+ ****************************************************/
 	boardInitMcu();
 
-	// Initialize the BMP280 sensor
-    if (!bmp.begin(0x76)) { // 0x76 is the common I2C address for BMP280
-        Serial.println("Could not find a valid BMP280 sensor, check wiring!");
-        while (1);
-    }
-
-	Serial.begin(115200);
 #if(AT_SUPPORT)
 	enableAt();
 #endif
 	deviceState = DEVICE_STATE_INIT;
 	LoRaWAN.ifskipjoin();
-}
+
+  /****************************************************
+ * FAN SETUP
+ ****************************************************/
+  pinMode(fan_pwm_pin, OUTPUT);
+  // Keep INPUT_PULLUP - essential for open-drain tachometer output
+  pinMode(tach_pin, INPUT_PULLUP); 
+
+  // Set the power
+  int pwm_value = percentage_To_Pwm(fan_power_percentage);
+  Serial.println(pwm_value);
+  analogWrite(fan_pwm_pin,pwm_value); 
+
+  // Interrupt on tach pin
+  attachInterrupt(digitalPinToInterrupt(tach_pin), counter, FALLING);
+  
+  /****************************************************
+ * bmp setup
+ ****************************************************/
+	// Initialize the BMP280 sensor
+    if (!bmp.begin(0x76)) { // 0x76 is the common I2C address for BMP280
+        Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+        while (1);
+    }
+  }
+
 
 void loop()
 {
@@ -199,4 +237,9 @@ void loop()
 			break;
 		}
 	}
+}
+
+
+void counter() {
+  pulse_count++;                // Interrupt: happens on each tach pulse
 }

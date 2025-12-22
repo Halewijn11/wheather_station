@@ -33,7 +33,7 @@ time_window_df = df.tail(50)
 st.info(f"Time since last measurement: **{last_measurement_string}**")
 
 
-# Layout
+# for the dbm
 col1, col2 = st.columns([1, 1])
 latest = time_window_df["uplink_message_rx_metadata_0_channel_rssi"].iloc[-1]
 with col1:
@@ -58,6 +58,7 @@ with col2:
     st.altair_chart(spark, use_container_width=True)
 
 
+#for the snr
 col1, col2 = st.columns([1, 1])
 latest = time_window_df["uplink_message_rx_metadata_0_snr"].iloc[-1]
 with col1:
@@ -76,6 +77,32 @@ with col2:
             scale=alt.Scale(domain=[
                 time_window_df["uplink_message_rx_metadata_0_snr"].min(),
                 time_window_df["uplink_message_rx_metadata_0_snr"].max()
+            ])
+        )
+    ).properties(height=100)
+    st.altair_chart(spark, use_container_width=True)
+
+
+#for the fan speed
+fan_rpm_colname = utils.get_full_payload_colname('fan_rpm')
+col1, col2 = st.columns([1, 1])
+latest = time_window_df[fan_rpm_colname].iloc[-1]
+with col1:
+    st.metric("last fan speed RPM", f"{latest:.1f}")
+
+with col2:
+    spark = alt.Chart(time_window_df.tail(50)).mark_line().encode(
+        x=alt.X("received_at", axis=None),
+        y=alt.Y(
+            fan_rpm_colname,
+            axis=alt.Axis(
+                    labels=True,
+                    ticks=True,
+                    title="rssi",
+                ),
+            scale=alt.Scale(domain=[
+                time_window_df[fan_rpm_colname].min(),
+                time_window_df[fan_rpm_colname].max()
             ])
         )
     ).properties(height=100)
