@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 def get_google_sheet_df(base_url = "https://docs.google.com/spreadsheets/d/",
                 sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI"): 
     df = pd.read_csv(f"{base_url}{sheet_id}/export?format=csv")
@@ -12,7 +13,7 @@ def get_full_payload_colname(col_name):
 #     return f"uplink_message_decoded_payload{col_name}"
 
 def tidy_google_sheet_df(google_sheet_df, 
-                         payload_data_col_name_list = ['pressure', 'temperature'],
+                         payload_data_col_name_list = ['pressure', 'temperature', 'fan_rpm'],
                          data_cols = ['received_at'],
                          lora_signal_quality_cols = ['uplink_message_rx_metadata_0_rssi', 'uplink_message_rx_metadata_0_snr', 'uplink_message_rx_metadata_0_channel_rssi']):
     cols = []
