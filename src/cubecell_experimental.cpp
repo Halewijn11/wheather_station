@@ -1,55 +1,202 @@
-/***************************************************************************
-  This is a library for the BMP280 humidity, temperature & pressure sensor
-  Designed specifically to work with the Adafruit BMP280 Breakout
-  ----> http://www.adafruit.com/products/2651
-  These sensors use I2C or SPI to communicate, 2 or 4 pins are required
-  to interface.
-  Adafruit invests time and resources providing this open source code,
-  please support Adafruit andopen-source hardware by purchasing products
-  from Adafruit!
-  Written by Limor Fried & Kevin Townsend for Adafruit Industries.
-  BSD license, all text above must be included in any redistribution
- ***************************************************************************/
-#include <Arduino.h>
-#include <Wire.h>
-#include <SPI.h>
+#include "LoRaWan_APP.h"
+#include "Arduino.h"
 #include <Adafruit_BMP280.h>
+#include "Utils.h"
 
-#define BMP280_ADDRESS 0x76
-Adafruit_BMP280 bmp; // I2C
-void setup() {
-  Serial.begin(9600);
-  while ( !Serial ) delay(100);   // wait for native usb
-  Serial.println(F("BMP280 test"));
-  unsigned status;
-  status = bmp.begin(BMP280_ADDRESS);
-  if (!status) {
-    Serial.println(F("Could not find a valid BMP280 sensor, check wiring or "
-                      "try a different address!"));
-    Serial.print("SensorID was: 0x"); Serial.println(bmp.sensorID(),16);
-    Serial.print("        ID of 0xFF probably means a bad address, a BMP 180 or BMP 085\n");
-    Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
-    Serial.print("        ID of 0x60 represents a BME 280.\n");
-    Serial.print("        ID of 0x61 represents a BME 680.\n");
-    while (1) delay(10);
-  }
-  /* Default settings from datasheet. */
-  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
-                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
-                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
-                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
-                  Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
-}
-void loop() {
-    Serial.print(F("Temperature = "));
-    Serial.print(bmp.readTemperature());
+
+/****************************************************
+ * LORA PREAMBLE  
+ ****************************************************/
+
+/*
+ * set LoraWan_RGB to Active,the RGB active in loraWan
+ * RGB red means sending;
+ * RGB purple means joined done;
+ * RGB blue means RxWindow1;
+ * RGB yellow means RxWindow2;
+ * RGB green means received done;
+ */
+
+
+ /*
+appeui: 70B3D57ED0074824
+deveui: 70B3D57ED0074825
+appkey: 84FA823981303163AFE2968797AFDD49
+ */
+ 
+
+/* OTAA para*/
+uint8_t devEui[] = { 0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x07, 0x48, 0x25 };
+uint8_t appEui[] = { 0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x07, 0x48, 0x24 };
+uint8_t appKey[] = { 0x84, 0xFA, 0x82, 0x39, 0x81, 0x30, 0x31, 0x63, 0xAF, 0xE2, 0x96, 0x87, 0x97, 0xAF, 0xDD, 0x49 };
+
+/* ABP para*/
+uint8_t nwkSKey[] = { 0x15, 0xb1, 0xd0, 0xef, 0xa4, 0x63, 0xdf, 0xbe, 0x3d, 0x11, 0x18, 0x1e, 0x1e, 0xc7, 0xda,0x85 };
+uint8_t appSKey[] = { 0xd7, 0x2c, 0x78, 0x75, 0x8c, 0xdc, 0xca, 0xbf, 0x55, 0xee, 0x4a, 0x77, 0x8d, 0x16, 0xef,0x67 };
+uint32_t devAddr =  ( uint32_t )0x007e6ae1;
+
+/*LoraWan channelsmask, default channels 0-7*/ 
+uint16_t userChannelsMask[6]={ 0x00FF,0x0000,0x0000,0x0000,0x0000,0x0000 };
+
+/*LoraWan region, select in arduino IDE tools*/
+LoRaMacRegion_t loraWanRegion = ACTIVE_REGION;
+
+/*LoraWan Class, Class A and Class C are supported*/
+DeviceClass_t  loraWanClass = LORAWAN_CLASS;
+
+/*the application data transmission duty cycle.  value in [ms].*/
+uint32_t appTxDutyCycle = 60000;
+
+/*OTAA or ABP*/
+bool overTheAirActivation = LORAWAN_NETMODE;
+
+/*ADR enable*/
+bool loraWanAdr = LORAWAN_ADR;
+
+/* set LORAWAN_Net_Reserve ON, the node could save the network info to flash, when node reset not need to join again */
+bool keepNet = LORAWAN_NET_RESERVE;
+
+/* Indicates if the node is sending confirmed or unconfirmed messages */
+bool isTxConfirmed = LORAWAN_UPLINKMODE;
+
+/* Application port */
+uint8_t appPort = 2;
+/*!
+* Number of trials to transmit the frame, if the LoRaMAC layer did not
+* receive an acknowledgment. The MAC performs a datarate adaptation,
+* according to the LoRaWAN Specification V1.0.2, chapter 18.4, according
+* to the following table:
+*
+* Transmission nb | Data Rate
+* ----------------|-----------
+* 1 (first)       | DR
+* 2               | DR
+* 3               | max(DR-1,0)
+* 4               | max(DR-1,0)
+* 5               | max(DR-2,0)
+* 6               | max(DR-2,0)
+* 7               | max(DR-3,0)
+* 8               | max(DR-3,0)
+*
+* Note, that if NbTrials is set to 1 or 2, the MAC will not decrease
+* the datarate, in case the LoRaMAC layer did not receive an acknowledgment
+*/
+uint8_t confirmedNbTrials = 4;
+
+/****************************************************
+ * FAN  PREAMBLE
+ ****************************************************/
+const int fan_pwm_pin = GPIO2;      // PWM control pin for the fan
+const int tach_pin    = GPIO3;      // Tachometer signal input pin
+const int fan_power_percentage = 100; //
+void counter(); 
+
+/****************************************************
+ * BMP 280 PREAMBLE 
+ ****************************************************/
+Adafruit_BMP280 bmp; // Create the sensor object
+
+
+/* Prepares the payload of the frame */
+static void prepareTxFrame(uint8_t port)
+{   
+    float temp = bmp.readTemperature(); 
+    int press = bmp.readPressure();
+
+	// 2. Print to Serial Monitor so you can see it on your PC
+    Serial.print("Sensor Temperature: ");
+    Serial.print(temp);
     Serial.println(" *C");
-    Serial.print(F("Pressure = "));
-    Serial.print(bmp.readPressure());
+
+    Serial.print("Sensor Pressure: ");
+    Serial.print(press);
     Serial.println(" Pa");
-    Serial.print(F("Approx altitude = "));
-    Serial.print(bmp.readAltitude(1013.25)); /* Adjusted to local forecast! */
-    Serial.println(" m");
-    Serial.println();
-    delay(2000);
+
+    int16_t tempInt = (int16_t)(temp * 100); 
+    int32_t pressInt = (uint32_t)(press);
+
+	// 2. Print to Serial Monitor so you can see it on your PC
+    Serial.print("Sensor Temperature that's going to be sent: ");
+    Serial.print(tempInt);
+    Serial.println(" *C");
+
+    Serial.print("Sensor Pressure that's going to be sent: ");
+    Serial.print(pressInt);
+    Serial.println(" Pa");
+
+	
+    appDataSize = 6; // <--- ADD THIS LINE!
+
+    appData[0] = (uint8_t)(tempInt >> 8);
+    appData[1] = (uint8_t)(tempInt & 0xFF);
+    
+    appData[2] = (uint8_t)(pressInt >> 24);
+    appData[3] = (uint8_t)(pressInt >> 16);
+    appData[4] = (uint8_t)(pressInt >> 8);
+    appData[5] = (uint8_t)(pressInt & 0xFF);
+	
+}
+
+void setup() {
+	boardInitMcu();
+
+	// Initialize the BMP280 sensor
+    if (!bmp.begin(0x76)) { // 0x76 is the common I2C address for BMP280
+        Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+        while (1);
+    }
+
+	Serial.begin(115200);
+#if(AT_SUPPORT)
+	enableAt();
+#endif
+	deviceState = DEVICE_STATE_INIT;
+	LoRaWAN.ifskipjoin();
+}
+
+void loop()
+{
+	switch( deviceState )
+	{
+		case DEVICE_STATE_INIT:
+		{
+#if(AT_SUPPORT)
+			getDevParam();
+#endif
+			printDevParam();
+			LoRaWAN.init(loraWanClass,loraWanRegion);
+			deviceState = DEVICE_STATE_JOIN;
+			break;
+		}
+		case DEVICE_STATE_JOIN:
+		{
+			LoRaWAN.join();
+			break;
+		}
+		case DEVICE_STATE_SEND:
+		{
+			prepareTxFrame( appPort );
+			LoRaWAN.send();
+			deviceState = DEVICE_STATE_CYCLE;
+			break;
+		}
+		case DEVICE_STATE_CYCLE:
+		{
+			// Schedule next packet transmission
+			txDutyCycleTime = appTxDutyCycle + randr( 0, APP_TX_DUTYCYCLE_RND );
+			LoRaWAN.cycle(txDutyCycleTime);
+			deviceState = DEVICE_STATE_SLEEP;
+			break;
+		}
+		case DEVICE_STATE_SLEEP:
+		{
+			LoRaWAN.sleep();
+			break;
+		}
+		default:
+		{
+			deviceState = DEVICE_STATE_INIT;
+			break;
+		}
+	}
 }

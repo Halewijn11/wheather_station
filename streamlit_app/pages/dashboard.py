@@ -26,7 +26,7 @@ with col2:
             axis=alt.Axis(
                     labels=True,
                     ticks=True,
-                    title="Temperature (°C)",
+                    title="Temp (°C)",
                 ),
             scale=alt.Scale(domain=[
                 time_window_df[temperature_colname].min(),
