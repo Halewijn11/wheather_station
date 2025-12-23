@@ -102,11 +102,46 @@ with col2:
                 ),
             scale=alt.Scale(domain=[
                 time_window_df[fan_rpm_colname].min(),
-                time_window_df[fan_rpm_colname].max()
+                2000
+                # time_window_df[fan_rpm_colname].max()
             ])
         )
     ).properties(height=100)
     st.altair_chart(spark, use_container_width=True)
 
-#this is now here
+#histogram of the transmission timegap
+recent_df = utils.filter_by_recency(df, hours = 24)
+transmission_timegap_colname = 'received_at_td_minutes'
+# fan_rpm_colname = utils.get_full_payload_colname('fan_rpm')
+col1, col2 = st.columns([1, 1])
+latest = recent_df[transmission_timegap_colname].iloc[-1]
+latest = pd.to_timedelta(latest, unit="m")
+latest = utils.format_timedelta(latest)
+# latest = utils.format_timedelta(latest)
+# print(latest)
+# utils.format_timedelta()
+with col1:
+    st.metric("last transmission timegap", f"{latest}")
+
+with col2:
+    spark = alt.Chart(recent_df).mark_point().encode(
+        x=alt.X("received_at", axis=None),
+        y=alt.Y(
+            transmission_timegap_colname,
+            axis=alt.Axis(
+                    labels=True,
+                    ticks=True,
+                    title="timegap (m)",
+                ),
+            scale=alt.Scale(domain=[
+                0,
+                recent_df[transmission_timegap_colname].max()
+            ])
+        )
+    ).properties(height=100)
+    st.altair_chart(spark, use_container_width=True)
+
+
+
+# utils.draw_histogram(recent_df, 'received_at_td')
     

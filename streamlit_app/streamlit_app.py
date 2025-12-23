@@ -16,6 +16,12 @@ status_page = st.Page(
     title="Status",
     icon=":material/memory:",
 )
+
+info_page = st.Page(
+    "pages/info.py",
+    title="info",
+    icon=":material/info:",
+)
 # project_2_page = st.Page(
 #     "views/chatbot.py",
 #     title="Chat Bot",
@@ -23,7 +29,7 @@ status_page = st.Page(
 # )
 
 # --- NAVIGATION SETUP [WITHOUT SECTIONS] ---
-pg = st.navigation(pages=[dashboard_page, status_page])
+pg = st.navigation(pages=[dashboard_page, status_page, info_page])
 
 # --- RUN NAVIGATION ---
 pg.run()

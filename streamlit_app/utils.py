@@ -1,5 +1,6 @@
 import pandas as pd
-
+import streamlit as st
+import altair as alt
 
 def get_google_sheet_df(base_url = "https://docs.google.com/spreadsheets/d/",
                 sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI"): 
@@ -11,6 +12,22 @@ def get_full_payload_colname(col_name):
 
 # def get_metadata_google_sheet_col_name(col_name):
 #     return f"uplink_message_decoded_payload{col_name}"
+def filter_by_recency(df, hours=0, minutes=0, seconds=0, 
+                      time_colname = 'seconds_since_now', 
+                      colname_unit = 'seconds'):
+    """
+    Filters the dataframe to only include rows from 'now' back to a specific duration.
+    """
+    # 1. Calculate the total window in minutes
+    total_window_seconds = (hours * 3600) + (minutes*60) + (seconds)
+    
+    # 2. Filter the dataframe
+    # We want rows where the 'minutes_since_now' is less than or equal to our window
+
+    mask = df[time_colname] <= total_window_seconds
+    filtered_df = df.loc[mask].copy()
+    
+    return filtered_df
 
 def tidy_google_sheet_df(google_sheet_df, 
                          payload_data_col_name_list = ['pressure', 'temperature', 'fan_rpm'],
@@ -28,7 +45,10 @@ def tidy_google_sheet_df(google_sheet_df,
     df['received_at'] =pd.to_datetime(df['received_at'], utc=True).dt.floor('s').dt.floor('s')
 
     #enriching the data
-    df['received_at_td'] = df['received_at'].diff().dt.total_seconds()/60 #td stands for time difference
+    df['received_at_td_seconds'] = df['received_at'].diff().dt.total_seconds() #td stands for time difference
+    df['received_at_td_minutes'] = df['received_at_td_seconds']/60
+    now = pd.Timestamp.now(tz='UTC')
+    df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
     return df
 
 def format_timedelta(td):
@@ -64,3 +84,21 @@ def get_last_measurement_string(df):
 def load_css(file_path):
     with open(file_path) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+
+
+def draw_histogram(df, metric_name):
+    # Ensure we don't have nulls for the main metric
+    clean_df = df.dropna(subset=[metric_name])
+
+    st.altair_chart(
+        alt.Chart(clean_df, height=200, width=200)
+        .mark_bar(binSpacing=0)
+        .encode(
+            alt.X(
+                metric_name,
+                type="quantitative",
+            ).bin(maxbins=20),
+            alt.Y("count()").axis(None),
+        )
+    )
