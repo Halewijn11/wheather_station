@@ -89,7 +89,6 @@ uint8_t confirmedNbTrials = 4;
 const int fan_pwm_pin = GPIO2;      // PWM control pin for the fan
 const int tach_pin    = GPIO3;      // Tachometer signal input pin
 const int fan_power_percentage = 100; //
-void counter(); 
 
 /****************************************************
  * BMP 280 PREAMBLE 
@@ -102,7 +101,7 @@ static void prepareTxFrame(uint8_t port)
 {   
     float temp = bmp.readTemperature(); 
     int press = bmp.readPressure();
-    int fan_rpm = readFanSpeed();
+    int fan_rpm = readFanSpeed_Updated(tach_pin);
 
 	// 2. Print to Serial Monitor so you can see it on your PC
     Serial.print("Sensor Temperature: ");
@@ -177,9 +176,6 @@ void setup() {
   int pwm_value = percentage_To_Pwm(fan_power_percentage);
   Serial.println(pwm_value);
   analogWrite(fan_pwm_pin,pwm_value); 
-
-  // Interrupt on tach pin
-  attachInterrupt(digitalPinToInterrupt(tach_pin), counter, FALLING);
   
   /****************************************************
  * bmp setup
@@ -237,9 +233,4 @@ void loop()
 			break;
 		}
 	}
-}
-
-
-void counter() {
-  pulse_count++;                // Interrupt: happens on each tach pulse
 }
