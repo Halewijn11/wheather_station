@@ -15,6 +15,7 @@ const int pulses_per_rev = 2;   // Most PC fans produce 2 pulses per revolution
 void counter(); 
 
 void setup() {
+  // boardInitMcu();
   // Use a higher baud rate for faster serial communication
   Serial.begin(115200); 
 
