@@ -11,6 +11,7 @@ github repository for many basic arduino projects: https://github.com/Circuit-Di
 streamlit cloud setup:    https://share.streamlit.io/?utm_source=streamlit&utm_medium=referral&utm_campaign=main&utm_content=-ss-streamlit-io-cloudpagehero   
 link to sensecap lorawan gateway dashboard:  https://sensecap.seeed.cc/portal/#/devices_gateway_details?eui=2CF7F1107340004E&redirect=devices_gateway&tabnum=2&device_network=1&device_gateway_type=100     
 Link to google sheets:  https://docs.google.com/spreadsheets/d/1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI/edit?usp=sharing  
+The github issue for heltec v3: https://github.com/HelTecAutomation/Heltec_ESP32/issues/147   
 
 
 ![image alt](https://github.com/Halewijn11/wheather_station/blob/1680deb90e4349785b8d4053723baacc6635e37a/img/introduction-to-arduino-nano-33-iot.png.webp)
