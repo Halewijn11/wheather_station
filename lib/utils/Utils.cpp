@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include "Adafruit_INA3221.h"
 
 // // Tell the library that these variables are defined in the main sketch
 // extern volatile unsigned int pulse_count;
@@ -7,6 +8,7 @@
 volatile unsigned int fan_pulse_count = 0;
 const int pulses_per_rev = 2;
 const int pwm_bit_depth =65536;
+
 
 
 int readFanSpeed() {
@@ -59,4 +61,20 @@ int readFanSpeed_Updated(int tach_pin) {
 int percentage_To_Pwm(int percentage) {
     return (int)(percentage * pwm_bit_depth) / 100-1;
 
+}
+
+
+Ina3221Reading readIna3221Channel(Adafruit_INA3221& ina3221,uint8_t channel) {
+  Ina3221Reading reading;
+
+  // Read voltage (V)
+  reading.voltage_V = ina3221.getBusVoltage(channel);
+
+  // Read current (mA)
+  reading.current_mA = ina3221.getCurrentAmps(channel) * 1000.0;
+
+  // Compute power (mW)
+  reading.power_mW = reading.voltage_V * reading.current_mA;
+
+  return reading;
 }
