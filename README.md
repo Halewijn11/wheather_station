@@ -17,3 +17,8 @@ The github issue for heltec v3: https://github.com/HelTecAutomation/Heltec_ESP32
 ![image alt](https://github.com/Halewijn11/wheather_station/blob/1680deb90e4349785b8d4053723baacc6635e37a/img/introduction-to-arduino-nano-33-iot.png.webp)
 
 ![image alt](https://github.com/Halewijn11/wheather_station/blob/2a952aa96edc1254dd3b97fe7ec18861e5b6ceb2/img/cubecell_abo1_pinout.jpg)
+
+
+# more information   
+GPIO41 is SDA on heltec v3  
+GPIP42 is SCL on heltec v3   
