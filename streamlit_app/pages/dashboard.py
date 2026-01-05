@@ -5,7 +5,7 @@ importlib.reload(utils)
 from streamlit_extras.metric_cards import style_metric_cards
 import altair as alt
 import numpy as np
-debug = 1
+debug = 0
 
 st.title("Wheather dashboard")
 
