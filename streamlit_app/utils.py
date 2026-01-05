@@ -2,9 +2,15 @@ import pandas as pd
 import streamlit as st
 import altair as alt
 
-def get_google_sheet_df(base_url = "https://docs.google.com/spreadsheets/d/",
-                sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI"): 
-    df = pd.read_csv(f"{base_url}{sheet_id}/export?format=csv")
+def get_google_sheet_df(sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
+    # Construct the base export URL
+    url = f"{base_url}{sheet_id}/export?format=csv"
+    
+    # Append the specific gid if provided
+    if sheet_gid:
+        url += f"&gid={sheet_gid}"
+    print(url)
+    df = pd.read_csv(url)
     return df
 
 def get_full_payload_colname(col_name):
@@ -30,16 +36,25 @@ def filter_by_recency(df, hours=0, minutes=0, seconds=0,
     return filtered_df
 
 def tidy_google_sheet_df(google_sheet_df, 
-                         payload_data_col_name_list = ['pressure', 'temperature', 'fan_rpm'],
+                         payload_col_name = ['uplink_message_frm_payload'],
+                         decoded_payload_data_col_name_list = ['pressure', 'temperature', 'fan_rpm'],
                          data_cols = ['received_at'],
                          lora_signal_quality_cols = ['uplink_message_rx_metadata_0_rssi', 'uplink_message_rx_metadata_0_snr', 'uplink_message_rx_metadata_0_channel_rssi']):
+    
+    #filtering the columns to only the relevant ones
     cols = []
-    payload_data_full_col_name_list = [get_full_payload_colname(payload_data_col_name) for payload_data_col_name in payload_data_col_name_list]
+    payload_data_full_col_name_list = [get_full_payload_colname(decoded_payload_data_col_name) for decoded_payload_data_col_name in decoded_payload_data_col_name_list]
+    cols.extend(payload_col_name)
     cols.extend(data_cols)
     cols.extend(payload_data_full_col_name_list)
     cols.extend(lora_signal_quality_cols)
     df = google_sheet_df.copy()
     df = df[cols]
+
+    #decoding the raw payload data
+    decoded_cols = df['uplink_message_frm_payload'].apply(decode_heltec_payload).apply(pd.Series)
+    df = pd.concat([df, decoded_cols], axis=1)
+
 
     #formatting
     df['received_at'] =pd.to_datetime(df['received_at'], utc=True).dt.floor('s').dt.floor('s')
@@ -49,6 +64,7 @@ def tidy_google_sheet_df(google_sheet_df,
     df['received_at_td_minutes'] = df['received_at_td_seconds']/60
     now = pd.Timestamp.now(tz='UTC')
     df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
+
     return df
 
 def format_timedelta(td):
@@ -102,3 +118,29 @@ def draw_histogram(df, metric_name):
             alt.Y("count()").axis(None),
         )
     )
+
+
+import base64
+import struct
+
+def decode_heltec_payload(b64_string):
+    # Decode Base64 to bytes
+    data = base64.b64decode(b64_string)
+    
+    # Check if we have the expected 12 bytes
+    if len(data) != 12:
+        return f"Error: Expected 12 bytes, got {len(data)}"
+
+    # '>HHHHHH' means: Big Endian, 6 Unsigned Shorts (2 bytes each)
+    # Based on your Arduino: Hum(Avg, Min, Max), Temp(Avg, Min, Max)
+    vals = struct.unpack('>HHHHHH', data)
+    
+    return {
+        "humidity_avg": vals[0] / 100.0,
+        "humidity_min": vals[1] / 100.0,
+        "humidity_max": vals[2] / 100.0,
+        "temp_avg":     vals[3] / 100.0,
+        "temp_min":     vals[4] / 100.0,
+        "temp_max":     vals[5] / 100.0
+    }
+
