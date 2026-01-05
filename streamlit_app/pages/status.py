@@ -14,12 +14,15 @@ st.title("Status")
 #     font_size_label="12px"        # optional: smaller label
 # )
 
+# #--------------------- general preamble to load data -----------------------------
+
+gid = '2078525972'
+google_sheet_df = utils.get_google_sheet_df(sheet_gid=gid)
+df = utils.tidy_google_sheet_df(google_sheet_df,decoded_payload_data_col_name_list=[])
+time_window_df = df.tail(50)
 
 # #--------------------- calculate some metrics -----------------------------
-google_sheet_df = utils.get_google_sheet_df()
-df = utils.tidy_google_sheet_df(google_sheet_df)
 last_measurement_string =  utils.get_last_measurement_string(df)
-time_window_df = df.tail(50)
 # #--------------------- building the streamlit app -----------------------------
 # --- Top row ---
 # top_cols = st.columns(3)
@@ -83,31 +86,31 @@ with col2:
     st.altair_chart(spark, use_container_width=True)
 
 
-#for the fan speed
-fan_rpm_colname = utils.get_full_payload_colname('fan_rpm')
-col1, col2 = st.columns([1, 1])
-latest = time_window_df[fan_rpm_colname].iloc[-1]
-with col1:
-    st.metric("last fan speed RPM", f"{latest:.1f}")
+# #for the fan speed
+# fan_rpm_colname = utils.get_full_payload_colname('fan_rpm')
+# col1, col2 = st.columns([1, 1])
+# latest = time_window_df[fan_rpm_colname].iloc[-1]
+# with col1:
+#     st.metric("last fan speed RPM", f"{latest:.1f}")
 
-with col2:
-    spark = alt.Chart(time_window_df.tail(50)).mark_line().encode(
-        x=alt.X("received_at", axis=None),
-        y=alt.Y(
-            fan_rpm_colname,
-            axis=alt.Axis(
-                    labels=True,
-                    ticks=True,
-                    title="rssi",
-                ),
-            scale=alt.Scale(domain=[
-                time_window_df[fan_rpm_colname].min(),
-                2000
-                # time_window_df[fan_rpm_colname].max()
-            ])
-        )
-    ).properties(height=100)
-    st.altair_chart(spark, use_container_width=True)
+# with col2:
+#     spark = alt.Chart(time_window_df.tail(50)).mark_line().encode(
+#         x=alt.X("received_at", axis=None),
+#         y=alt.Y(
+#             fan_rpm_colname,
+#             axis=alt.Axis(
+#                     labels=True,
+#                     ticks=True,
+#                     title="rssi",
+#                 ),
+#             scale=alt.Scale(domain=[
+#                 time_window_df[fan_rpm_colname].min(),
+#                 2000
+#                 # time_window_df[fan_rpm_colname].max()
+#             ])
+#         )
+#     ).properties(height=100)
+#     st.altair_chart(spark, use_container_width=True)
 
 #histogram of the transmission timegap
 recent_df = utils.filter_by_recency(df, hours = 24)
