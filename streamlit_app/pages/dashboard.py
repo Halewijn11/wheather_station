@@ -7,7 +7,7 @@ import altair as alt
 import numpy as np
 debug = 1
 
-st.title("Wheather dashboard")
+st.title("Wheather dashboardsssss")
 
 # #--------------------- general preamble to load data -----------------------------
 
