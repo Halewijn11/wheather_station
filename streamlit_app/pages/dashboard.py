@@ -5,7 +5,7 @@ importlib.reload(utils)
 from streamlit_extras.metric_cards import style_metric_cards
 import altair as alt
 import numpy as np
-debug = 0
+debug = 1
 
 st.title("Wheather dashboard")
 
@@ -16,7 +16,7 @@ google_sheet_df = utils.get_google_sheet_df(sheet_gid=gid)
 
 if debug == True:
     st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
-    
+
 df = utils.tidy_google_sheet_df(google_sheet_df,decoded_payload_data_col_name_list=[])
 time_window_df = df.tail(50)
 
