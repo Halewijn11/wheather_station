@@ -6,6 +6,7 @@ importlib.reload(utils)
 from streamlit_extras.metric_cards import style_metric_cards
 import altair as alt
 import numpy as np
+import os
 debug = 0
 
 st.title("Wheather dashboard")
@@ -18,12 +19,12 @@ google_sheet_df = utils.get_google_sheet_df(sheet_gid=gid)
 if debug == True:
     st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
 
-
-
 df = utils.tidy_google_sheet_df(google_sheet_df,decoded_payload_data_col_name_list=[])
 # df  = pd.read_csv('data.csv')
 time_window_df = df.tail(50)
 
+# 1. Get the directory that this specific file (dashboard.py) is in
+current_dir = os.path.dirname(__file__)
 
 # #--------------------- sunset and sunrise -----------------------------
 sunrise_str, sunset_str = utils.get_sunrise_sunset()
@@ -31,13 +32,15 @@ sunrise_str, sunset_str = utils.get_sunrise_sunset()
 col1, col2, col3, col4, buffer = st.columns([6, 9, 6, 9, 30])
 
 with col1:
-    st.image('./assets/sunrise.png', width=50)
+    img_path = os.path.join(current_dir, "..", "assets", "sunrise.png")
+    st.image(img_path, width=50)
 with col2:
     # Use <br> instead of \n\n to remove the paragraph gap
     st.markdown(f"**Sunrise**<br>{sunrise_str}", unsafe_allow_html=True)
 
 with col3:
-    st.image('./assets/sunset.png', width=50)
+    img_path = os.path.join(current_dir, "..", "assets", "sunset.png")
+    st.image(img_path, width=50)
 with col4:
     # Applying the same fix here
     st.markdown(f"**Sunset**<br>{sunset_str}", unsafe_allow_html=True)
