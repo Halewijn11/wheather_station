@@ -1,6 +1,10 @@
 import pandas as pd
 import streamlit as st
 import altair as alt
+from astral import LocationInfo
+from astral.sun import sun
+from datetime import date
+
 
 def get_google_sheet_df(sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
     # Construct the base export URL
@@ -144,3 +148,18 @@ def decode_heltec_payload(b64_string):
         "temp_max":     vals[5] / 100.0
     }
 
+def get_sunrise_sunset(latitude=50.924503, longitude=4.112950):
+    city = LocationInfo(
+        name="Affligem",
+        region="Belgium",
+        timezone="Europe/Brussels",
+        latitude=latitude,
+        longitude=longitude
+    )
+
+    s = sun(city.observer, date=date.today(), tzinfo=city.timezone)
+
+    sunrise_str = s["sunrise"].strftime("%H:%M") + " AM"
+    sunset_str = s["sunset"].strftime("%H:%M") + " PM"
+
+    return sunrise_str, sunset_str
