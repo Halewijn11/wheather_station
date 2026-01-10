@@ -22,3 +22,12 @@ The github issue for heltec v3: https://github.com/HelTecAutomation/Heltec_ESP32
 # more information   
 GPIO41 is SDA on heltec v3  
 GPIP42 is SCL on heltec v3   
+
+# lines of color  
+Black: GND  
+Red: Vin  
+blue: SDA
+yellow: SCL  
+green: PWM  
+White:  analog   
+striped white:   interrupt   
