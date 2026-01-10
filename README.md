@@ -26,7 +26,7 @@ GPIP42 is SCL on heltec v3
 # lines of color  
 Black: GND  
 Red: Vin  
-blue: SDA
+blue: SDA  
 yellow: SCL  
 green: PWM  
 White:  analog   
