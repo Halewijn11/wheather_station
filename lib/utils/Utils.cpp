@@ -6,6 +6,8 @@
 // extern const int pulses_per_rev
 
 volatile unsigned int fan_pulse_count = 0;
+volatile unsigned long last_micros = 0;
+
 const int pulses_per_rev = 2;
 const int pwm_bit_depth =65536;
 
@@ -78,3 +80,63 @@ Ina3221Reading readIna3221Channel(Adafruit_INA3221& ina3221,uint8_t channel) {
 
   return reading;
 }
+
+
+// ##################### everything for the rain sensor ###############################3
+volatile unsigned int rain_pulse_count = 0;
+void rain_Counter() {
+  unsigned long current_micros = micros();
+    // Ignore pulses that happen within 200,000 microseconds (200ms) of each other
+  if (current_micros - last_micros > 200000) {
+    rain_pulse_count++;
+    last_micros = current_micros;
+  }
+  // Serial.println("total read rain pulses:");
+  // Serial.println(rain_pulse_count);
+}
+
+
+
+// ##################### everything for the wind sensor ###############################3
+volatile unsigned int wind_pulse_count = 0;
+void wind_Counter() {
+  unsigned long current_micros = micros();
+    // Ignore pulses that happen within 200,000 microseconds (200ms) of each other
+  if (current_micros - last_micros > 200000) {
+    wind_pulse_count++;
+    last_micros = current_micros;
+  }
+}
+
+// ##################### everything for the wind direction ###############################3
+float getWindDirection(float voltage, float maxVoltage) {
+  if (voltage < 0.01) return 0.0; // Noise floor / True North
+
+  float degrees = (voltage / maxVoltage) * 360.0;
+
+  // Ensure we stay within the 0-359.9 range
+  if (degrees >= 360.0) {
+    degrees = 0.0;
+  }
+
+  return degrees;
+}
+
+// ##################### everything for light sensor ###############################3
+float getSolarRadiation(Adafruit_ADS1115& ads, uint8_t channel) {
+    // 1. Read the raw ADC value from the specified channel
+    int16_t rawResult = ads.readADC_SingleEnded(channel);
+    
+    // 2. Noise floor safety: If the reading is slightly negative due to noise, set to 0
+    if (rawResult < 0) rawResult = 0;
+
+    // 3. Convert raw value to millivolts 
+    // GAIN_ONE: 1 bit = 0.125mV
+    float millivolts = rawResult * 0.125;
+    
+    // 4. Davis 6450 Scale: 1.67 mV per W/m^2
+    float solarRadiation = millivolts / 1.67;
+
+    return solarRadiation;
+}
+
