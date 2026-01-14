@@ -4,6 +4,7 @@
 link to the streamlit stie: https://wheatherstation-e9gurrh3q7eo7ik2g4dzda.streamlit.app/status   
 link to the things network: https://eu1.cloud.thethings.network/console/  
 link to thingspeak channel: https://thingspeak.mathworks.com/channels/3194176/private_show 
+google appscript: https://script.google.com/home/    
 github page to thingspeak arduino: https://github.com/mathworks/thingspeak-arduino  
 github page for heltec cubecell: https://github.com/HelTecAutomation/platform-heltec-cubecell 
 cubecell information page:   https://docs.heltec.org/en/node/asr650x/asr650x_general_docs/quick_start/index.html   
@@ -22,3 +23,12 @@ The github issue for heltec v3: https://github.com/HelTecAutomation/Heltec_ESP32
 # more information   
 GPIO41 is SDA on heltec v3  
 GPIP42 is SCL on heltec v3   
+
+# lines of color  
+Black: GND  
+Red: Vin  
+blue: SDA  
+yellow: SCL  
+green: PWM  
+White:  analog   
+striped white:   interrupt   
