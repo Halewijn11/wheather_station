@@ -1,3 +1,5 @@
 streamlit-extras
 astral
 streamlit
+pandas
+st-gsheets-connection
