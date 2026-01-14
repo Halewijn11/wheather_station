@@ -18,7 +18,7 @@
 #define BMP280_ADDRESS 0x76
 Adafruit_BMP280 bmp; // I2C
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   while ( !Serial ) delay(100);   // wait for native usb
   Serial.println(F("BMP280 test"));
   unsigned status;

@@ -7,21 +7,30 @@ from streamlit_extras.metric_cards import style_metric_cards
 import altair as alt
 import numpy as np
 import os
+from streamlit_gsheets import GSheetsConnection
+
 debug = 0
+cached_time = 0
+time_window_hours = 1
+
+url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
+
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+google_sheet_df = conn.read(spreadsheet=url, ttl=cached_time)
+# st.dataframe(google_sheet_df)
+
 
 st.title("Wheather dashboard")
 
 # #--------------------- general preamble to load data -----------------------------
 
-gid = '2078525972'
-google_sheet_df = utils.get_google_sheet_df(sheet_gid=gid)
-
 if debug == True:
     st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
 
-df = utils.tidy_google_sheet_df(google_sheet_df,decoded_payload_data_col_name_list=[])
+df = utils.tidy_google_sheet_df(google_sheet_df)
 # df  = pd.read_csv('data.csv')
-time_window_df = df.tail(50)
+time_window_df = utils.filter_by_recency(df, hours = time_window_hours)
 
 # 1. Get the directory that this specific file (dashboard.py) is in
 current_dir = os.path.dirname(__file__)
@@ -48,73 +57,41 @@ with col4:
 with buffer:
     pass
 # #--------------------- temperature -----------------------------
-# temperature_colname = utils.get_full_payload_colname('temperature')
-temperature_colname = 'temp_avg'
-
-col1, col2 = st.columns([1, 1])
-latest = time_window_df[temperature_colname].iloc[-1]
-with col1:
-    st.metric("Temperature", f"{latest:.1f} °C")
-
-with col2:
-    spark = alt.Chart(time_window_df.tail(50)).mark_line().encode(
-        x=alt.X("received_at", axis=None),
-        y=alt.Y(
-            temperature_colname,
-            axis=alt.Axis(
-                    labels=True,
-                    ticks=True,
-                    title="Temp (°C)",
-                ),
-            scale=alt.Scale(domain=[
-                time_window_df[temperature_colname].min(),
-                time_window_df[temperature_colname].max()
-            ])
-        
-        ),
-        tooltip=[
-        alt.Tooltip("received_at:T", title="Time"),
-        alt.Tooltip(temperature_colname, title="Temp (°C)", format=".1f")
-    ]
-    ).properties(height=100)
-    st.altair_chart(spark, use_container_width=True)
-
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'sht_temperature_avg',
+    y_variable_unit = '°C',
+    y_variable_prefix_text = 'Temperature',
+    y_label = "Temp (°C)",
+    x_label = 'x_label'
+)
 
 # #--------------------- humidity -----------------------------
-# pressure_colname = utils.get_full_payload_colname('pressure')
-y_variable_colname = 'humidity_avg'
-y_variable_name = 'humidity'
-y_variable_unuit = '%'
-col1, col2 = st.columns([1, 1])
-latest = np.round(time_window_df[y_variable_colname].iloc[-1],1)
-with col1:
-    st.metric(y_variable_name, f"{latest:.1f} {y_variable_unuit}")
 
-with col2:
-    spark = alt.Chart(time_window_df.tail(50)).mark_line().encode(
-        x=alt.X("received_at", axis=None),
-        y=alt.Y(
-            y_variable_colname,
-            axis=alt.Axis(
-                    labels=True,
-                    ticks=True,
-                    title=f"{y_variable_name} ({y_variable_unuit})",
-                ),
-            scale=alt.Scale(domain=[
-                time_window_df[y_variable_colname].min(),
-                time_window_df[y_variable_colname].max()
-            ])
-        ),
-                tooltip=[
-        alt.Tooltip("received_at:T", title="Time"),
-        alt.Tooltip(y_variable_colname, title="hPa", format=".1f")
-    ]
-    ).properties(height=100)
-    st.altair_chart(spark, use_container_width=True)
+
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'sht_humidity_avg',
+    y_variable_unit = '%',
+    y_variable_prefix_text = 'Humidity',
+    y_label = "Humidity (%)",
+    x_label = 'received at'
+)
+
+
+ # #--------------------- pressure -----------------------------
+
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'bmp_pressure_avg',
+    y_variable_unit = 'hPa',
+    y_variable_prefix_text = 'Pressure',
+    y_label = "Pressure (hPa)",
+    x_label = 'received at'
+)
 
 
 
-# # #--------------------- pressure -----------------------------
 # # pressure_colname = utils.get_full_payload_colname('pressure')
 # pressure_colname = 'pressure'
 # col1, col2 = st.columns([1, 1])

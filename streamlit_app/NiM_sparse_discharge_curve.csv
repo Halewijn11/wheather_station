@@ -1,0 +1,7 @@
+voltage,stage_of_charge,behavior
+1.42,100,Fresh off the charger; drops quickly.
+1.30,80,"The battery enters its ""working"" range."
+1.22,50,The plateau—the battery stays here for hours.
+1.18,20,"Reaching the ""knee"" where voltage begins to fall."
+1.10,10,Rapid decline; device may start to struggle.
+1.00,0,Cut-off point to prevent permanent damage.
