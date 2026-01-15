@@ -13,17 +13,13 @@ debug = 0
 cached_time = 0
 time_window_hours = 1
 
-url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
-
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-google_sheet_df = conn.read(spreadsheet=url, ttl=cached_time)
-# st.dataframe(google_sheet_df)
-
 
 st.title("Wheather dashboard")
 
 # #--------------------- general preamble to load data -----------------------------
+url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
+conn = st.connection("gsheets", type=GSheetsConnection)
+google_sheet_df = conn.read(spreadsheet=url, ttl=cached_time)
 
 if debug == True:
     st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
@@ -67,8 +63,6 @@ utils.plot_metric_with_graph(
 )
 
 # #--------------------- humidity -----------------------------
-
-
 utils.plot_metric_with_graph(
     time_window_df = time_window_df,
     y_variable_colname = 'sht_humidity_avg',
@@ -80,7 +74,6 @@ utils.plot_metric_with_graph(
 
 
  # #--------------------- pressure -----------------------------
-
 utils.plot_metric_with_graph(
     time_window_df = time_window_df,
     y_variable_colname = 'bmp_pressure_avg',
@@ -89,6 +82,39 @@ utils.plot_metric_with_graph(
     y_label = "Pressure (hPa)",
     x_label = 'received at'
 )
+
+
+ # #--------------------- light intensity -----------------------------
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'light_intensity_avg',
+    y_variable_unit = 'W/m²',
+    y_variable_prefix_text = 'Light intensity',
+    y_label = "Light intensity (W/m²)",
+    x_label = 'received at'
+)
+
+#  # #--------------------- wind speed -----------------------------
+# utils.plot_metric_with_graph(
+#     time_window_df = time_window_df,
+#     y_variable_colname = 'wind_pulses_total',
+#     y_variable_unit = '',
+#     y_variable_prefix_text = 'wind pulses',
+#     y_label = "Wind pulses",
+#     x_label = 'received at'
+# )
+
+#  #--------------------- wind direction as a function of tiem -----------------------------
+# radial_coords_df = utils.transform_to_radial_cartesian(time_window_df,'received_at', 'wind_direction')
+# utils.plot_metric_with_graph(
+#     time_window_df = radial_coords_df,
+#     y_variable_colname = 'y_radial',
+#     y_variable_unit = '°',
+#     y_variable_prefix_text = 'wind direction',
+#     y_label = "",
+#     x_label = '',
+#     x_variable_colname = 'x_radial'
+# )
 
 
 
