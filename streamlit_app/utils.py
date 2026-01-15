@@ -25,7 +25,7 @@ def get_full_payload_colname(col_name):
 #     return f"uplink_message_decoded_payload{col_name}"
 def filter_by_recency(df, hours=0, minutes=0, seconds=0, 
                       time_colname = 'seconds_since_now', 
-                      colname_unit = 'seconds'):
+                      colname_unit = 'seconds', mode = 'live'):
     """
     Filters the dataframe to only include rows from 'now' back to a specific duration.
     """
@@ -34,11 +34,35 @@ def filter_by_recency(df, hours=0, minutes=0, seconds=0,
     
     # 2. Filter the dataframe
     # We want rows where the 'minutes_since_now' is less than or equal to our window
+    if mode == 'live':
+        mask = df[time_colname] <= total_window_seconds
+        filtered_df = df.loc[mask].copy()
+        return filtered_df
+    elif mode == 'last_session': 
+        latest_recorded_second = df['seconds_since_now'].min() # assuming 0 is 'now'
+        limit = latest_recorded_second + (total_window_seconds)
+        mask = df[time_colname] <= limit
+        filtered_df = df.loc[mask].copy()
+        return filtered_df
 
-    mask = df[time_colname] <= total_window_seconds
-    filtered_df = df.loc[mask].copy()
-    
-    return filtered_df
+    # return filtered_df
+
+
+def filter_data(df, window_hours=1, mode='live'):
+    if df.empty:
+        return df
+        
+    if mode == 'live':
+        # Your original logic: filter by actual recency
+        total_seconds = window_hours * 3600
+        return df[df['seconds_since_now'] <= total_seconds].copy()
+        
+    elif mode == 'last_session':
+        # Show the most recent 'window' of data available, 
+        # regardless of how long ago it happened.
+        latest_recorded_second = df['seconds_since_now'].min() # assuming 0 is 'now'
+        limit = latest_recorded_second + (window_hours * 3600)
+        return df[df['seconds_since_now'] <= limit].copy()
 
 def tidy_google_sheet_df(google_sheet_df):
     df = google_sheet_df.copy()
