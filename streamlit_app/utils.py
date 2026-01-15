@@ -403,7 +403,7 @@ def plot_data_altair_final(df, y_variable_colname, x_variable_colname='received_
 
 
 def plot_metric_with_graph(time_window_df, y_variable_colname, y_variable_unit, 
-                           y_variable_prefix_text, y_label, x_label='received at'):
+                           y_variable_prefix_text, y_label, x_label='received at', x_variable_colname = 'received_at'):
     """
     Creates a row with a Streamlit metric on the left and 
     the custom Altair snapping chart on the right.
@@ -425,5 +425,34 @@ def plot_metric_with_graph(time_window_df, y_variable_colname, y_variable_unit,
             time_window_df, 
             y_variable_colname=y_variable_colname,
             x_label=x_label,
-            y_label=y_label
+            y_label=y_label,
+            x_variable_colname = x_variable_colname
         )
+
+
+def transform_to_radial_cartesian(df, time_col, degree_col):
+    """
+    Transforms degree data over time into x, y coordinates 
+    where time = radius (0 to 1) and degrees = angle.
+    """
+    # 1. Sort by time to ensure the sequence is correct
+    df = df.sort_values(time_col).copy()
+    
+    # 2. Create the Radius (r)
+    # Scales from 0 (first row) to 1 (last row)
+    n = len(df)
+    if n > 1:
+        df['r'] = np.linspace(0, 1, n)
+    else:
+        df['r'] = 0
+
+    # 3. Convert Degrees to Radians
+    # We use (90 - degrees) or simply sin/cos swap to ensure 0 is North
+    rad = np.deg2rad(df[degree_col])
+
+    # 4. Calculate X and Y
+    # x = r * sin(theta), y = r * cos(theta)
+    df['x_radial'] = df['r'] * np.sin(rad)
+    df['y_radial'] = df['r'] * np.cos(rad)
+    
+    return df[['x_radial', 'y_radial']]
