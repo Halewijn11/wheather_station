@@ -12,6 +12,8 @@ from streamlit_gsheets import GSheetsConnection
 debug = 0
 cached_time = 0
 time_window_hours = 1
+time_window_filtering_mode = 'last_session'
+
 
 
 st.title("Wheather dashboard")
@@ -26,7 +28,7 @@ if debug == True:
 
 df = utils.tidy_google_sheet_df(google_sheet_df)
 # df  = pd.read_csv('data.csv')
-time_window_df = utils.filter_by_recency(df, hours = time_window_hours)
+time_window_df = utils.filter_by_recency(df, hours = time_window_hours, mode = time_window_filtering_mode)
 
 # 1. Get the directory that this specific file (dashboard.py) is in
 current_dir = os.path.dirname(__file__)
