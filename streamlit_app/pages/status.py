@@ -23,14 +23,14 @@ time_window_hours = 1
 
 # #--------------------- general preamble to load data -----------------------------
 
-url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
-conn = st.connection("gsheets", type=GSheetsConnection)
-google_sheet_df = conn.read(spreadsheet=url, ttl=cached_time)
+# url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
+# conn = st.connection("gsheets", type=GSheetsConnection)
+# google_sheet_df = conn.read(spreadsheet=url, ttl=cached_time)
 
-if debug == True:
-    st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
+# if debug == True:
+#     st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
 
-df = utils.tidy_google_sheet_df(google_sheet_df)
+df = utils.get_data()
 # df  = pd.read_csv('data.csv')
 time_window_df = utils.filter_by_recency(df, hours = time_window_hours)
 

@@ -16,19 +16,20 @@ time_window_filtering_mode = 'last_session'
 
 
 
+
+
 st.title("Wheather dashboard")
 
 # #--------------------- general preamble to load data -----------------------------
-url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
-conn = st.connection("gsheets", type=GSheetsConnection)
-google_sheet_df = conn.read(spreadsheet=url, ttl=cached_time)
+# url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
+# conn = st.connection("gsheets", type=GSheetsConnection)
+# google_sheet_df = conn.read(spreadsheet=url, ttl=cached_time)
 
-if debug == True:
-    st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
+# if debug == True:
+#     st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
 
-df = utils.tidy_google_sheet_df(google_sheet_df)
-# df  = pd.read_csv('data.csv')
-time_window_df = utils.filter_by_recency(df, hours = time_window_hours, mode = time_window_filtering_mode)
+# 1. Load the big dataset (cached)
+df = utils.get_data()
 
 # 1. Get the directory that this specific file (dashboard.py) is in
 current_dir = os.path.dirname(__file__)
@@ -54,6 +55,39 @@ with col4:
 
 with buffer:
     pass
+
+
+# #--------------------- button for time window -----------------------------
+time_options = {
+    "Last Hour": 1,
+    "Last 24 Hours": 24,
+    "Last Week": 168  # 24 * 7
+}
+
+# Create the dropdown (selectbox)
+selected_label = st.selectbox(
+    "Select Time Range:",
+    options=list(time_options.keys()),
+    index=0  # Default to "Last Hour"
+)
+
+# Get the numeric value based on selection
+time_window_hours = time_options[selected_label]
+
+# Now filter your data using this dynamic variable
+time_window_df = utils.filter_by_recency(df, hours=time_window_hours)
+
+
+# #--------------------- sample the dataframe to a lower resolution -----------------------------
+
+
+# 2. Filter by the number of hours defined in our config
+filtered_df = utils.filter_by_recency(df, hours = time_window_hours, mode = time_window_filtering_mode)
+
+# 3. Apply the resolution defined in our config
+time_window_df = utils.resample_data(filtered_df, selected_label)
+
+
 # #--------------------- temperature -----------------------------
 utils.plot_metric_with_graph(
     time_window_df = time_window_df,
