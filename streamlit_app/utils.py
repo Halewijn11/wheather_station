@@ -5,7 +5,7 @@ from astral import LocationInfo
 from astral.sun import sun
 from datetime import date
 import numpy as np
-
+from streamlit_gsheets import GSheetsConnection
 
 def get_google_sheet_df(sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
     # Construct the base export URL
@@ -76,6 +76,36 @@ def tidy_google_sheet_df(google_sheet_df):
     df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
 
     return df
+
+@st.cache_data()
+def get_data():
+    url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
+    # Note: Ensure st.connection is available here
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    google_sheet_df = conn.read(spreadsheet=url, ttl=0) 
+    
+    # Assuming tidy_google_sheet_df is also in this utils.py file
+    df = tidy_google_sheet_df(google_sheet_df)
+    return df
+
+def resample_data(df, window_label):
+    # Ensure the index is datetime for resampling
+    df = df.copy()
+    df.set_index('received_at', inplace=True)
+    
+    # Define resolution based on selection
+    if window_label == "Last Hour":
+        return df.reset_index() # Raw data (no change)
+    elif window_label == "Last 24 Hours":
+        resample_rate = '15min'
+    else: # Last Week
+        resample_rate = '1H'
+    
+    # Resample numeric columns only, then reset index to keep 'received_at'
+    resampled_df = df.select_dtypes(include=['number']).resample(resample_rate).mean()
+    return resampled_df.reset_index()
+
+
 
 def format_timedelta(td):
     if pd.isnull(td):
