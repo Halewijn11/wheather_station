@@ -34,7 +34,7 @@ df = utils.get_data()
 
 # 1. Get the directory that this specific file (dashboard.py) is in
 current_dir = os.path.dirname(__file__)
-
+asset_path = os.path.join(current_dir, "..", "assets")
 # #--------------------- current date -----------------------------
 # 1. Get the current date
 now = datetime.now()
@@ -74,7 +74,8 @@ with col4:
 # --- Moon Phase ---
 with col5:
     # moon_icon_path comes directly from your utils function
-    moonphase_image_filepath, index = utils.get_moonphase_filepath(image_repo= './assets/')
+    moonphase_image_filepath, index = utils.get_moonphase_filepath(image_repo= asset_path)
+    st.write(f"DEBUG: Looking for image at: {moonphase_image_filepath}")
     st.image(moonphase_image_filepath, width=50)
 with col6:
     st.markdown(f"**Moon**<br> {index}/8", unsafe_allow_html=True)
