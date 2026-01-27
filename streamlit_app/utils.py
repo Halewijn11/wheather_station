@@ -6,6 +6,8 @@ from astral.sun import sun
 from datetime import date
 import numpy as np
 from streamlit_gsheets import GSheetsConnection
+from datetime import datetime
+import os
 
 def get_google_sheet_df(sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
     # Construct the base export URL
@@ -77,7 +79,7 @@ def tidy_google_sheet_df(google_sheet_df):
 
     return df
 
-@st.cache_data()
+@st.cache_data(ttl = 3*60)
 def get_data():
     url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
     # Note: Ensure st.connection is available here
@@ -97,7 +99,7 @@ def resample_data(df, window_label):
     if window_label == "Last Hour":
         return df.reset_index() # Raw data (no change)
     elif window_label == "Last 24 Hours":
-        resample_rate = '15min'
+        resample_rate = '5min'
     else: # Last Week
         resample_rate = '1H'
     
@@ -237,6 +239,33 @@ def get_battery_icon_filepath(percentage, image_repo = './', flat = False):
     else:
         return image_repo + f"battery{insert}_empty.png"
     
+
+
+def get_moonphase_filepath(image_repo = './'):
+    # Reference New Moon (Jan 6, 2000)
+    diff = datetime.now() - datetime(2000, 1, 6, 18, 14)
+    days = diff.total_seconds() / 86400
+    lunation = days % 29.530588853
+    phase_index = int((lunation / 29.53) * 8) % 8
+    
+    # List matches the order of the lunar cycle
+    phases = [
+        "new_moon", 
+        "waxing_crescent", 
+        "first_quarter", 
+        "waxing_gibbous",
+        "full_moon", 
+        "waning_gibbous", 
+        "last_quarter", 
+        "waning_crescent"
+    ]
+        
+    # Convert "New Moon" -> "new_moon.png"
+    # filename = phase_name.lower().replace(" ", "_") + ".png"
+    filepath = os.path.join(image_repo, f"{phases[phase_index]}.png")
+    
+    return filepath, phase_index
+
 def plot_data(df, 
               y_variable_colname, 
               x_variable_colname='received_at',

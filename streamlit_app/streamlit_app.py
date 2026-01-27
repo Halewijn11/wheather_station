@@ -7,7 +7,7 @@ importlib.reload(utils)
 # --- PAGE SETUP ---
 dashboard_page = st.Page(
     "pages/dashboard.py",
-    title="Wheater dashboard",
+    title="Weather dashboard",
     icon=":material/bar_chart:",
     default=True,
 )

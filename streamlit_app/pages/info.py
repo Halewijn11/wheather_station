@@ -3,6 +3,7 @@
 import streamlit as st
 import pandas as pd
 import utils
+import os
 
 url = "https://docs.google.com/spreadsheets/d/1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI/edit?usp=sharing"
 st.write("The raw data of this project can be found back [in this google sheet](%s)." % url)
@@ -15,7 +16,10 @@ st.write("The raw data of this project can be found back [in this google sheet](
 # #--------------------- battery status -----------------------------
 col_icon, col_text, buffer = st.columns([2, 3, 20])
 battery_voltage = 3.3
-smooth_discharge_df = pd.read_csv('NiM_smooth_discharge_curve.csv')
+current_dir = os.path.dirname(__file__)
+asset_path = os.path.join(current_dir, "..", "assets")
+discharge_csv_path = os.path.join(asset_path, 'NiM_smooth_discharge_curve.csv')
+smooth_discharge_df = pd.read_csv(discharge_csv_path)
 battery_percentage = utils.calculate_stage_of_charge(smooth_discharge_df, 3, battery_voltage)
 img_filepath = utils.get_battery_icon_filepath(battery_percentage, './assets/', flat = True)
 
