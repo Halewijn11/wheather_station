@@ -75,7 +75,7 @@ with col4:
 with col5:
     # moon_icon_path comes directly from your utils function
     moonphase_image_filepath, index = utils.get_moonphase_filepath(image_repo= asset_path)
-    st.write(f"DEBUG: Looking for image at: {moonphase_image_filepath}")
+    # st.write(f"DEBUG: Looking for image at: {moonphase_image_filepath}")
     st.image(moonphase_image_filepath, width=50)
 with col6:
     st.markdown(f"**Moon**<br> {index}/8", unsafe_allow_html=True)
