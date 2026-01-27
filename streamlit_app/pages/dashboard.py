@@ -8,6 +8,7 @@ import altair as alt
 import numpy as np
 import os
 from streamlit_gsheets import GSheetsConnection
+from datetime import datetime
 
 debug = 0
 cached_time = 0
@@ -34,10 +35,27 @@ df = utils.get_data()
 # 1. Get the directory that this specific file (dashboard.py) is in
 current_dir = os.path.dirname(__file__)
 
+# #--------------------- current date -----------------------------
+# 1. Get the current date
+now = datetime.now()
+
+# 2. Format it (e.g., Wednesday, June 4)
+# %A = Weekday, %B = Month, %d = Day
+date_string = now.strftime("%A, %B %d")
+
+# 3. Display it in Streamlit
+st.header('Affligem, Belgium')
+
+st.write(date_string)
+
 # #--------------------- sunset and sunrise -----------------------------
 sunrise_str, sunset_str = utils.get_sunrise_sunset()
 # 1. We keep your column structure to limit the width
-col1, col2, col3, col4, buffer = st.columns([6, 9, 6, 9, 30])
+icon_width = 6
+text_width = 9
+buffer_width = 30
+
+col1, col2, col3, col4, col5, col6, buffer = st.columns([icon_width, text_width,icon_width, text_width,icon_width, text_width,buffer_width])
 
 with col1:
     img_path = os.path.join(current_dir, "..", "assets", "sunrise.png")
@@ -52,6 +70,14 @@ with col3:
 with col4:
     # Applying the same fix here
     st.markdown(f"**Sunset**<br>{sunset_str}", unsafe_allow_html=True)
+
+# --- Moon Phase ---
+with col5:
+    # moon_icon_path comes directly from your utils function
+    moonphase_image_filepath, index = utils.get_moonphase_filepath(image_repo= './assets/')
+    st.image(moonphase_image_filepath, width=50)
+with col6:
+    st.markdown(f"**Moon**<br> {index}/8", unsafe_allow_html=True)
 
 with buffer:
     pass
@@ -95,7 +121,7 @@ utils.plot_metric_with_graph(
     y_variable_unit = '°C',
     y_variable_prefix_text = 'Temperature',
     y_label = "Temp (°C)",
-    x_label = 'x_label'
+    x_label = 'received at'
 )
 
 # #--------------------- humidity -----------------------------
