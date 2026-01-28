@@ -157,15 +157,26 @@ utils.plot_metric_with_graph(
     x_label = 'received at'
 )
 
-#  # #--------------------- wind speed -----------------------------
-# utils.plot_metric_with_graph(
-#     time_window_df = time_window_df,
-#     y_variable_colname = 'wind_pulses_total',
-#     y_variable_unit = '',
-#     y_variable_prefix_text = 'wind pulses',
-#     y_label = "Wind pulses",
-#     x_label = 'received at'
-# )
+ # #--------------------- wind speed -----------------------------
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'wind_pulses_total',
+    y_variable_unit = '',
+    y_variable_prefix_text = 'wind pulses',
+    y_label = "Wind pulses",
+    x_label = 'received at'
+)
+
+
+ # #--------------------- wind direction -----------------------------
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'wind_direction',
+    y_variable_unit = '',
+    y_variable_prefix_text = 'wind direction',
+    y_label = "Wind direction",
+    x_label = 'received at'
+)
 
 #  #--------------------- wind direction as a function of tiem -----------------------------
 # radial_coords_df = utils.transform_to_radial_cartesian(time_window_df,'received_at', 'wind_direction')

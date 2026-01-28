@@ -6,6 +6,7 @@ import utils
 import os
 
 url = "https://docs.google.com/spreadsheets/d/1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI/edit?usp=sharing"
+url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
 st.write("The raw data of this project can be found back [in this google sheet](%s)." % url)
 # st.markdown("check out this [link](%s)" % url)
 # """
@@ -21,7 +22,7 @@ asset_path = os.path.join(current_dir, "..", "assets")
 discharge_csv_path = os.path.join(asset_path, 'NiM_smooth_discharge_curve.csv')
 smooth_discharge_df = pd.read_csv(discharge_csv_path)
 battery_percentage = utils.calculate_stage_of_charge(smooth_discharge_df, 3, battery_voltage)
-img_filepath = utils.get_battery_icon_filepath(battery_percentage, './assets/', flat = True)
+img_filepath = utils.get_battery_icon_filepath(battery_percentage, asset_path + '/', flat = True)
 
 col1,col2, buffer = st.columns([7, 20,30])
 with col1:
