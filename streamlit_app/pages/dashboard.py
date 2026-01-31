@@ -178,6 +178,16 @@ utils.plot_metric_with_graph(
     x_label = 'received at'
 )
 
+ # #--------------------- rain pulses -----------------------------
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'rain_pulses',
+    y_variable_unit = '',
+    y_variable_prefix_text = 'rain pulses',
+    y_label = "rain pulses",
+    x_label = 'received at'
+)
+
 #  #--------------------- wind direction as a function of tiem -----------------------------
 # radial_coords_df = utils.transform_to_radial_cartesian(time_window_df,'received_at', 'wind_direction')
 # utils.plot_metric_with_graph(
