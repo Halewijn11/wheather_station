@@ -1,0 +1,82 @@
+function doPost(e) {
+  try {
+    // Parse the incoming JSON payload from TTN
+    var payload = JSON.parse(e.postData.contents);
+
+    // 1. EXTRACT METADATA
+    // Note: TTN payloads usually wrap these inside 'uplink_message'
+    var msg = payload.uplink_message || payload; 
+    
+    var deviceId = payload.end_device_ids ? payload.end_device_ids.device_id : "N/A";
+    var timeStamp = payload.received_at || new Date().toISOString();
+    var rawPayload = msg.frm_payload || "N/A";
+    
+    // Extract RSSI and SNR from the first gateway metadata entry
+    var rssi = (msg.rx_metadata && msg.rx_metadata[0]) ? msg.rx_metadata[0].rssi : "N/A";
+    var snr = (msg.rx_metadata && msg.rx_metadata[0]) ? msg.rx_metadata[0].snr : "N/A";
+
+    // 2. EXTRACT DECODED DATA
+    var decoded = msg.decoded_payload || {};
+
+    // Helper to safely get nested values (e.g., bmp_temperature.avg)
+    function getVal(obj, key, subKey) {
+      return (obj[key] && obj[key][subKey] !== undefined) ? obj[key][subKey] : "";
+    }
+
+    // Prepare the data row for the sheet
+    var rowData = [
+      timeStamp,
+      deviceId,
+      rssi,
+      snr,
+      rawPayload,
+      // BMP Temperature
+      getVal(decoded, 'bmp_temperature', 'avg'),
+      getVal(decoded, 'bmp_temperature', 'max'),
+      getVal(decoded, 'bmp_temperature', 'min'),
+      // SHT Temperature
+      getVal(decoded, 'sht_temperature', 'avg'),
+      getVal(decoded, 'sht_temperature', 'max'),
+      getVal(decoded, 'sht_temperature', 'min'),
+      // SHT Humidity
+      getVal(decoded, 'sht_humidity', 'avg'),
+      getVal(decoded, 'sht_humidity', 'max'),
+      getVal(decoded, 'sht_humidity', 'min'),
+      // Pressure
+      getVal(decoded, 'pressure_pa', 'avg'),
+      getVal(decoded, 'pressure_pa', 'max'),
+      getVal(decoded, 'pressure_pa', 'min'),
+      //light sensor 
+      getVal(decoded, 'light_solar', 'avg'),
+      getVal(decoded, 'light_solar', 'max'),
+      getVal(decoded, 'light_solar', 'min'),
+
+      // Wind
+      getVal(decoded, 'wind', 'direction_deg'),
+      getVal(decoded, 'wind', 'pulses_max'),
+      getVal(decoded, 'wind', 'pulses_min'),
+      getVal(decoded, 'wind', 'pulses_total'),
+
+      // Power metrics
+      getVal(decoded, 'power', 'voltage_V'),
+      getVal(decoded, 'power', 'current_mA'),
+      getVal(decoded, 'power', 'power_mW'),
+      // Rain
+      // getVal(decoded, 'wind', 'pulses_total'),
+      decoded.rain_pulses !== undefined ? decoded.rain_pulses : ""
+    ];
+
+    // 3. LOG TO SHEET
+    var scriptProperties = PropertiesService.getScriptProperties();
+    var sheetId = scriptProperties.getProperty("SHEET_ID");
+    if (!sheetId) throw new Error("Sheet ID not found in Script Properties.");
+    
+    var sheet = SpreadsheetApp.openById(sheetId).getSheetByName("Sheet1");
+    sheet.appendRow(rowData);
+
+    return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
+    
+  } catch (error) {
+    return ContentService.createTextOutput("Error: " + error.message).setMimeType(ContentService.MimeType.TEXT);
+  }
+}

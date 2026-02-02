@@ -106,6 +106,7 @@ void wind_Counter() {
     wind_pulse_count++;
     last_micros = current_micros;
   }
+  // Serial.println("pulse!");
 }
 
 // ##################### everything for the wind direction ###############################3
