@@ -2,6 +2,7 @@
 #include "Arduino.h"
 #include <Adafruit_BMP280.h>
 #include <Adafruit_ADS1X15.h>
+#include "Adafruit_INA3221.h"
 #include "Utils.h"
 #include "SHT4x.h"
 
@@ -97,6 +98,8 @@ int sampleCount = 0;
 /* Sensor Objects */
 Adafruit_BMP280 bmp;
 Adafruit_ADS1115 ads;
+Adafruit_INA3221 ina3221;
+
 SHT4x sht;
 
 /*everything for the sht temperature humidity sensor*/
@@ -110,7 +113,11 @@ SensorStats shtTempstats = {0, 200000.0, -200000.0};
 SensorStats shtHumidityStats = {0, 200000.0, 0.0};
 WindDirectionTracker windDirectionTracker = {0.0, 0.0};
 WindSpeedTracker windSpeedTracker;
-RainTracker rainTracker; // NEW
+RainTracker rainTracker; 
+SensorStats voltageStats = {0, 200000.0, 0.0};
+SensorStats currentStats = {0, 200000.0, 0.0};
+SensorStats powerStats = {0, 200000.0, 0.0};
+
 
 /*gpio pins*/
 const byte rainPin = GPIO2;
@@ -120,10 +127,15 @@ const byte windPin = GPIO1;
 uint32_t adcWinddirectionChannel = 1;
 uint32_t adcLightIntensityChannel = 0;
 
+// Increment this whenever you change the payload structure
+uint8_t payloadVersion = 1; 
+
 /* Prepares the payload of the frame */
 static void prepareTxFrame( uint8_t port ) {
     uint16_t cursor = 0;
 
+    // Version byte
+    appData[cursor++] = payloadVersion;
     // pack all the stats
     windDirectionTracker.pack(appData, cursor, sampleCount, 1, 2);
     windSpeedTracker.pack(appData, cursor);
@@ -133,6 +145,9 @@ static void prepareTxFrame( uint8_t port ) {
     shtTempstats.pack(appData, cursor, sampleCount, 100, 2);
     shtHumidityStats.pack(appData, cursor, sampleCount, 100, 2);
     rainTracker.pack(appData, cursor); 
+    voltageStats.pack(appData, cursor, sampleCount, 100, 2); 
+    currentStats.pack(appData, cursor, sampleCount, 100, 2);
+    powerStats.pack(appData, cursor, sampleCount, 100, 2);
 
     // print all the stats
     windDirectionTracker.print(sampleCount);
@@ -142,6 +157,10 @@ static void prepareTxFrame( uint8_t port ) {
     lightIntensityStats.print("light",sampleCount);
     shtTempstats.print("sht temp",sampleCount);
     shtHumidityStats.print("sht humidity",sampleCount);
+    // print all the stats
+    voltageStats.print("Voltage (V)", sampleCount);
+    currentStats.print("Current (mA)", sampleCount);
+    powerStats.print("Power (mW)", sampleCount);
     rainTracker.print(); 
 
 
@@ -182,6 +201,12 @@ void setup() {
         while (1);
     }
 
+    if (!ina3221.begin(0x40, &Wire)) { // can use other I2C addresses or buses
+        Serial.println("Failed to find INA3221 chip");
+        while (1)
+        delay(10);
+    }
+
     // RAIN SENSOR INIT
     pinMode(rainPin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(rainPin), rain_Counter, FALLING);
@@ -189,6 +214,17 @@ void setup() {
     // WIND SENSOR INIT
     pinMode(windPin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(windPin), wind_Counter, FALLING);
+
+    // power sensor init
+    ina3221.setAveragingMode(INA3221_AVG_16_SAMPLES);
+
+    // Set shunt resistances for all channels to 0.05 ohms
+    for (uint8_t i = 0; i < 3; i++) {
+        ina3221.setShuntResistance(i, 0.05);
+    }
+
+    // Set a power valid alert to tell us if ALL channels are between the two
+    ina3221.setPowerValidLimits(2.0 /* lower limit */, 15.0 /* upper limit */);
 
 
     deviceState = DEVICE_STATE_INIT;
@@ -224,6 +260,15 @@ void loop() {
             shtTempstats.update(sht.getTemperature());
             shtHumidityStats.update(sht.getHumidity());
 
+            //the power sensor
+            Ina3221Reading r = readIna3221Channel(ina3221, 0);
+            float voltage_V = r.voltage_V;
+            float current_mA = r.current_mA;
+            float power_mW = r.power_mW;
+            voltageStats.update(r.voltage_V);
+            currentStats.update(r.current_mA);
+            powerStats.update(r.power_mW);
+
             windDirectionTracker.update(degrees);
             windSpeedTracker.update();
             bmp280Tempstats.update(bmp.readTemperature());
@@ -248,6 +293,9 @@ void loop() {
                 shtTempstats.reset();
                 shtHumidityStats.reset();
                 rainTracker.reset(); // Resets the actual rain_pulse_count to 0
+                voltageStats.reset();
+                currentStats.reset();
+                powerStats.reset();
                 deviceState = DEVICE_STATE_CYCLE;
             } else {
                 // Not ready to send yet, just go back to sleep/cycle

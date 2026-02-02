@@ -51,14 +51,23 @@ last_measurement_string =  utils.get_last_measurement_string(df)
 
 st.info(f"Time since last measurement: **{last_measurement_string}**")
 
-
-# #--------------------- rssi -----------------------------
+# #--------------------- power -----------------------------
 utils.plot_metric_with_graph(
     time_window_df = time_window_df,
-    y_variable_colname = 'rssi',
-    y_variable_unit = 'dBm',
-    y_variable_prefix_text = 'rssi',
-    y_label = "rssi (dBm)",
+    y_variable_colname = 'power_avg',
+    y_variable_unit = 'mW',
+    y_variable_prefix_text = 'avg power',
+    y_label = "power (mW)",
+    x_label = 'received at'
+)
+
+# #--------------------- battery_voltage -----------------------------
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'voltage_avg',
+    y_variable_unit = 'V',
+    y_variable_prefix_text = 'avg voltage',
+    y_label = "voltage (V)",
     x_label = 'received at'
 )
 
@@ -69,6 +78,16 @@ utils.plot_metric_with_graph(
     y_variable_unit = 'snr',
     y_variable_prefix_text = 'snr',
     y_label = "snr",
+    x_label = 'received at'
+)
+
+# #--------------------- rssi -----------------------------
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'rssi',
+    y_variable_unit = 'dBm',
+    y_variable_prefix_text = 'rssi',
+    y_label = "rssi (dBm)",
     x_label = 'received at'
 )
 
