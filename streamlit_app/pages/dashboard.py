@@ -30,11 +30,15 @@ st.title("Wheather dashboard")
 #     st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
 
 # 1. Load the big dataset (cached)
-df = utils.get_data()
+
 
 # 1. Get the directory that this specific file (dashboard.py) is in
 current_dir = os.path.dirname(__file__)
 asset_path = os.path.join(current_dir, "..", "assets")
+
+discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
+discharge_curve = pd.read_csv(discharge_csv_path)
+df = utils.get_data(discharge_curve)
 # #--------------------- current date -----------------------------
 # 1. Get the current date
 now = datetime.now()
@@ -52,10 +56,14 @@ st.write(date_string)
 sunrise_str, sunset_str = utils.get_sunrise_sunset()
 # 1. We keep your column structure to limit the width
 icon_width = 6
-text_width = 9
-buffer_width = 30
+text_width = 15
+buffer_width = 20
 
-col1, col2, col3, col4, col5, col6, buffer = st.columns([icon_width, text_width,icon_width, text_width,icon_width, text_width,buffer_width])
+col1, col2, col3, col4, col5, col6, col7, col8 ,buffer = st.columns([icon_width, text_width,
+                                                         icon_width, text_width,
+                                                         icon_width, text_width,
+                                                        icon_width, text_width,
+                                                         buffer_width])
 
 with col1:
     img_path = os.path.join(current_dir, "..", "assets", "sunrise.png")
@@ -79,6 +87,17 @@ with col5:
     st.image(moonphase_image_filepath, width=50)
 with col6:
     st.markdown(f"**Moon**<br> {index}/8", unsafe_allow_html=True)
+
+# --- Moon Phase ---
+with col7:
+    # moon_icon_path comes directly from your utils function
+    img_path = os.path.join(asset_path, 'solar_noon.png')
+    sunrise_str, sunset_str = utils.get_sunrise_sunset()
+    solar_noon_str = utils.get_solar_noon()
+    # st.write(f"DEBUG: Looking for image at: {moonphase_image_filepath}")
+    st.image(img_path, width=50)
+with col8:
+    st.markdown(f"**Solar noon**<br> {solar_noon_str}", unsafe_allow_html=True)
 
 with buffer:
     pass

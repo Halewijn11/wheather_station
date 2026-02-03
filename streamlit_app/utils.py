@@ -66,7 +66,7 @@ def filter_data(df, window_hours=1, mode='live'):
         limit = latest_recorded_second + (window_hours * 3600)
         return df[df['seconds_since_now'] <= limit].copy()
 
-def tidy_google_sheet_df(google_sheet_df):
+def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries = 1):
     df = google_sheet_df.copy()
     #formatting
     df['received_at'] =pd.to_datetime(df['received_at'], utc=True).dt.floor('s').dt.floor('s')
@@ -76,18 +76,19 @@ def tidy_google_sheet_df(google_sheet_df):
     df['received_at_td_minutes'] = df['received_at_td_seconds']/60
     now = pd.Timestamp.now(tz='UTC')
     df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
+    df['battery_percentage'] = df.apply(lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row['voltage_avg']), axis=1)
 
     return df
 
 @st.cache_data(ttl = 3*60)
-def get_data():
+def get_data(discharge_curve):
     url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
     # Note: Ensure st.connection is available here
     conn = st.connection("gsheets", type=GSheetsConnection)
     google_sheet_df = conn.read(spreadsheet=url, ttl=0) 
     
     # Assuming tidy_google_sheet_df is also in this utils.py file
-    df = tidy_google_sheet_df(google_sheet_df)
+    df = tidy_google_sheet_df(google_sheet_df, discharge_curve)
     return df
 
 def resample_data(df, window_label):
@@ -202,6 +203,26 @@ def get_sunrise_sunset(latitude=50.924503, longitude=4.112950):
 
     return sunrise_str, sunset_str
 
+def get_solar_noon(latitude=50.924503, longitude=4.112950):
+    """
+    Calculates the exact time of solar noon for the current date.
+    """
+    city = LocationInfo(
+        name="Affligem",
+        region="Belgium",
+        timezone="Europe/Brussels",
+        latitude=latitude,
+        longitude=longitude
+    )
+
+    # Calculate sun events for today
+    s = sun(city.observer, date=date.today(), tzinfo=city.timezone)
+
+    # Extract noon and format it
+    # s["noon"] returns a datetime object
+    solar_noon_str = s["noon"].strftime("%H:%M")
+    
+    return solar_noon_str
 
 def calculate_stage_of_charge(discharge_curve, num_batteries, readout_voltage):
     # 1. Calculate voltage per individual cell
