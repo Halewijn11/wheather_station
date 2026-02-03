@@ -14,6 +14,8 @@ st.title("Status")
 debug = 0
 cached_time = 0
 time_window_hours = 1
+time_window_filtering_mode = 'last_session'
+
 
 # Apply custom CSS to metric cards
 # style_metric_cards(
@@ -29,13 +31,41 @@ time_window_hours = 1
 
 # if debug == True:
 #     st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
-
-df = utils.get_data()
-# df  = pd.read_csv('data.csv')
-time_window_df = utils.filter_by_recency(df, hours = time_window_hours)
-
-# 1. Get the directory that this specific file (dashboard.py) is in
 current_dir = os.path.dirname(__file__)
+asset_path = os.path.join(current_dir, "..", "assets")
+discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
+discharge_curve = pd.read_csv(discharge_csv_path)
+
+df = utils.get_data(discharge_curve)
+# df  = pd.read_csv('data.csv')
+
+# --- NEW: Time Window Selection ---
+time_options = {
+    "Last Hour": 1,
+    "Last 24 Hours": 24,
+    "Last Week": 168
+}
+
+selected_label = st.selectbox(
+    "Select Time Range:",
+    options=list(time_options.keys()),
+    index=0 
+)
+
+time_window_hours = time_options[selected_label]
+
+# Now filter your data using this dynamic variable
+time_window_df = utils.filter_by_recency(df, hours=time_window_hours)
+
+
+# #--------------------- sample the dataframe to a lower resolution -----------------------------
+
+
+# 2. Filter by the number of hours defined in our config
+filtered_df = utils.filter_by_recency(df, hours = time_window_hours, mode = time_window_filtering_mode)
+
+# 3. Apply the resolution defined in our config
+time_window_df = utils.resample_data(filtered_df, selected_label)
 
 # #--------------------- calculate some metrics -----------------------------
 last_measurement_string =  utils.get_last_measurement_string(df)
@@ -51,6 +81,28 @@ last_measurement_string =  utils.get_last_measurement_string(df)
 
 st.info(f"Time since last measurement: **{last_measurement_string}**")
 
+
+# #--------------------- battery status -----------------------------
+col_icon, col_text, buffer = st.columns([2, 3, 20])
+#get the battery voltage from the last record
+battery_percentage = time_window_df['battery_percentage'].iloc[-1]
+img_filepath = utils.get_battery_icon_filepath(battery_percentage, asset_path + '/', flat = True)
+
+col1,col2, buffer = st.columns([7, 20,30])
+with col1:
+    st.image(img_filepath, width=100) 
+
+with col2:
+    # Adjust the 'px' value (e.g., 25px) to move the text lower or higher
+    st.markdown(
+        f"""
+        <div style="margin-top: 4px; font-size: 20px; font-weight: bold;">
+            {int(battery_percentage)}%
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+
 # #--------------------- power -----------------------------
 utils.plot_metric_with_graph(
     time_window_df = time_window_df,
@@ -58,6 +110,16 @@ utils.plot_metric_with_graph(
     y_variable_unit = 'mW',
     y_variable_prefix_text = 'avg power',
     y_label = "power (mW)",
+    x_label = 'received at'
+)
+
+# #--------------------- battery_percentage -----------------------------
+utils.plot_metric_with_graph(
+    time_window_df = time_window_df,
+    y_variable_colname = 'battery_percentage',
+    y_variable_unit = '%',
+    y_variable_prefix_text = 'battery percentage',
+    y_label = "battery percentage (%)",
     x_label = 'received at'
 )
 
