@@ -4,8 +4,31 @@
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 void setup() {
-  pwm.begin();
-  pwm.setPWMFreq(1600); // Max frequency for quietest operation
+  Serial.begin(115200);
+  while (!Serial); 
+  
+  // Power on the module
+  pinMode(Vext, OUTPUT);
+  digitalWrite(Vext, LOW); 
+  delay(1000); // Increased delay for stabilization
+
+  Wire.begin();
+  
+  // Start the PWM driver
+  if (!pwm.begin()) {
+      Serial.println("PWM Board Fail!");
+      while (1);
+  }
+
+  // RECOVERY STEP: Force a software reset and a sleep-wake cycle
+  pwm.reset();
+  delay(10);
+  
+  // Set frequency (Note: 1600Hz is high, try 1000Hz for testing stability)
+  pwm.setPWMFreq(1000); 
+  delay(10);
+  
+  Serial.println("Setup complete!");
 }
 
 /**
@@ -28,10 +51,14 @@ void setFanSpeed(int channel, int percent) {
 
 void loop() {
   // Example: Run Fan 1 (Channel 0) at 50%
+  //print statements in between to show what percentage is begin set
+  Serial.println("Setting Fan Speed to 0%");
   setFanSpeed(0, 0);
   delay(5000); 
+  Serial.println("Setting Fan Speed to 50%");
   setFanSpeed(0, 50);
   delay(5000); 
+  Serial.println("Setting Fan Speed to 100%");
   setFanSpeed(0, 100);
   delay(5000); 
 

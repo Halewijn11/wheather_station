@@ -3,6 +3,7 @@
 #include <Arduino.h>  // <--- Add this line
 #include <math.h>
 #include <Adafruit_ADS1X15.h> // Make sure this is at the top
+#include <Adafruit_PWMServoDriver.h>
 
 
 extern volatile unsigned int fan_pulse_count;
@@ -23,8 +24,9 @@ float getSolarRadiation(Adafruit_ADS1115& ads, uint8_t channel);
 
 
 int readFanSpeed();
+void setExternalFanSpeed(Adafruit_PWMServoDriver& pwmBoard, int pwm_channel, int percent);
 void fan_Counter();
-int readFanSpeed_Updated(int tach_pin);
+int readFanSpeed_Updated(int tach_pin, unsigned long duration_ms);
 int percentage_To_Pwm(int percentage); 
 
 //for the ina3221 readings

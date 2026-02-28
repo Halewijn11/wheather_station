@@ -6,7 +6,7 @@
 
 const int fan_pwm_pin = GPIO2;      // PWM control pin for the fan
 const int tach_pin    = GPIO3;      // Tachometer signal input pin
-`
+
 volatile unsigned int pulse_count = 0; // Use unsigned int for pulse count
 unsigned long last_measure = 0;
 

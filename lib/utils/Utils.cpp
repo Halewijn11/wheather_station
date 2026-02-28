@@ -11,7 +11,18 @@ volatile unsigned long last_micros = 0;
 const int pulses_per_rev = 2;
 const int pwm_bit_depth =65536;
 
-
+void setExternalFanSpeed(Adafruit_PWMServoDriver& pwmBoard, int pwm_channel, int percent) {
+    // 1. Constrain for safety
+    int safe_percent = constrain(percent, 0, 100);
+    int safe_channel = constrain(pwm_channel, 0, 15);
+    
+    // 2. Map 0-100% to 12-bit (0-4095)
+    // Formula: (percent / 100) * 4095
+    int dutyCycle = (safe_percent * 4095) / 100;
+    
+    // 3. Send to the I2C board
+    pwmBoard.setPWM(safe_channel, 0, dutyCycle);
+}
 
 int readFanSpeed() {
     noInterrupts();
@@ -36,28 +47,27 @@ void fan_Counter() {
   fan_pulse_count++;                // Interrupt: happens on each tach pulse
 }
 
-int readFanSpeed_Updated(int tach_pin) {
-    // 1. Reset count and attach interrupt right now
+int readFanSpeed_Updated(int tach_pin, unsigned long duration_ms) {
+    // 1. Reset count and attach interrupt
     fan_pulse_count = 0;
-    
-    // Dynamically attach the interrupt only for this measurement
     attachInterrupt(digitalPinToInterrupt(tach_pin), fan_Counter, FALLING);
     
     unsigned long start_time = millis();
     
-    // 2. Wait for 1 second to accumulate pulses
-    while (millis() - start_time < 1000) {
-        yield(); // Keeps the watchdog happy and background tasks running
+    // 2. Wait for the CUSTOM duration (e.g., 500ms, 2000ms)
+    while (millis() - start_time < duration_ms) {
+        yield(); 
     }
 
-    // 3. Immediately detach the interrupt so the fan stops "poking" the CPU
+    // 3. Detach the interrupt
     detachInterrupt(digitalPinToInterrupt(tach_pin));
 
     // 4. Calculate RPM
-    unsigned int pulses;
-    pulses = fan_pulse_count;
-    float revolutions = (float)pulses / pulses_per_rev;
-    return (int)(revolutions * 60.0);
+    // Formula: (Pulses / PulsesPerRev) * (60000 / MeasurementTime)
+    float revolutions = (float)fan_pulse_count / pulses_per_rev;
+    float rpm = revolutions * (60000.0 / duration_ms); 
+    
+    return (int)rpm;
 }
 
 int percentage_To_Pwm(int percentage) {

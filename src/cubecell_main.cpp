@@ -5,6 +5,7 @@
 #include "Adafruit_INA3221.h"
 #include "Utils.h"
 #include "SHT4x.h"
+#include <Adafruit_PWMServoDriver.h>
 
 
 /****************************************************
@@ -95,6 +96,13 @@ uint32_t numSamples = 15;
 uint32_t measurementInterval_s = 1;
 int sampleCount = 0;
 
+// Fan Specifics
+Adafruit_PWMServoDriver pwmBoard = Adafruit_PWMServoDriver();
+const int fan_tach_pin = GPIO1;  
+const int pwm_channel = 0;   
+const int target_speed_pct = 50; 
+const int fan_speed_measurement_timems = 500;
+
 /* Sensor Objects */
 Adafruit_BMP280 bmp;
 Adafruit_ADS1115 ads;
@@ -116,22 +124,25 @@ WindSpeedTracker windSpeedTracker;
 RainTracker rainTracker; 
 SensorStats voltageStats = {0, 200000.0, 0.0};
 SensorStats currentStats = {0, 200000.0, 0.0};
-SensorStats powerStats = {0, 200000.0, 0.0};
+// SensorStats powerStats = {0, 200000.0, 0.0};
 
 
 /*gpio pins*/
-const byte rainPin = GPIO2;
-const byte windPin = GPIO1; 
+const byte windPin = GPIO2; 
+const byte rainPin = GPIO3;
 
 /* ADC channels for sensors */
 uint32_t adcWinddirectionChannel = 1;
 uint32_t adcLightIntensityChannel = 0;
 
 // Increment this whenever you change the payload structure
-uint8_t payloadVersion = 1; 
+uint8_t payloadVersion = 2; 
 
 /* Prepares the payload of the frame */
 static void prepareTxFrame( uint8_t port ) {
+    // 1. MEASURE FAN RPM (Only happens once per uplink)
+    int current_fan_rpm = readFanSpeed_Updated(fan_tach_pin, fan_speed_measurement_timems);
+
     uint16_t cursor = 0;
 
     // Version byte
@@ -145,9 +156,13 @@ static void prepareTxFrame( uint8_t port ) {
     shtTempstats.pack(appData, cursor, sampleCount, 100, 2);
     shtHumidityStats.pack(appData, cursor, sampleCount, 100, 2);
     rainTracker.pack(appData, cursor); 
-    voltageStats.pack(appData, cursor, sampleCount, 100, 2); 
-    currentStats.pack(appData, cursor, sampleCount, 100, 2);
-    powerStats.pack(appData, cursor, sampleCount, 100, 2);
+    // voltageStats.pack(appData, cursor, sampleCount, 100, 2); 
+    // currentStats.pack(appData, cursor, sampleCount, 100, 2);
+    // powerStats.pack(appData, cursor, sampleCount, 100, 2);
+
+    // 2. ADD FAN RPM TO PAYLOAD (2 bytes)
+    appData[cursor++] = (uint8_t)(current_fan_rpm >> 8);
+    appData[cursor++] = (uint8_t)(current_fan_rpm & 0xFF);
 
     // print all the stats
     windDirectionTracker.print(sampleCount);
@@ -158,10 +173,14 @@ static void prepareTxFrame( uint8_t port ) {
     shtTempstats.print("sht temp",sampleCount);
     shtHumidityStats.print("sht humidity",sampleCount);
     // print all the stats
-    voltageStats.print("Voltage (V)", sampleCount);
-    currentStats.print("Current (mA)", sampleCount);
-    powerStats.print("Power (mW)", sampleCount);
+    // voltageStats.print("Voltage (V)", sampleCount);
+    // currentStats.print("Current (mA)", sampleCount);
+    Serial.print("Uplink Measurement - Fan RPM: ");
+    Serial.print(current_fan_rpm);
+    // powerStats.print("Power (mW)", sampleCount);
     rainTracker.print(); 
+    // Serial.print("RPM: ");
+    // Serial.println(current_fan_rpm);
 
 
     appDataSize = cursor;
@@ -178,14 +197,13 @@ static void prepareTxFrame( uint8_t port ) {
 void setup() {
     Serial.begin(115200);
     
-    // CubeCell specific MCU init
-    boardInitMcu();
+
 
     // CubeCell Power Management: Turn on Vext to power sensors
     pinMode(Vext, OUTPUT);
     digitalWrite(Vext, LOW); 
-    delay(100); // Give sensors time to wake up
-
+    Wire.begin();
+    delay(100);
     if (!ads.begin()) {
         Serial.println("ADS1115 Fail!");
         while (1);
@@ -201,10 +219,22 @@ void setup() {
         while (1);
     }
 
-    if (!ina3221.begin(0x40, &Wire)) { // can use other I2C addresses or buses
-        Serial.println("Failed to find INA3221 chip");
-        while (1)
-        delay(10);
+
+    // ina3221.begin(0x40, &Wire);
+    // if (!ina3221.begin()) { // can use other I2C addresses or buses
+    //     Serial.println("Failed to find INA3221 chip");
+    //     while (1)
+    //     delay(10);
+    // }
+
+    // if (!ina3221.begin(0x41, &Wire)) { 
+    // Serial.println("Failed to find INA3221 chip at 0x41");
+    // while (1) delay(10);
+    // }
+
+    if (!pwmBoard.begin()) {
+        Serial.println("PWM Board Fail!");
+        while (1);
     }
 
     // RAIN SENSOR INIT
@@ -216,15 +246,20 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(windPin), wind_Counter, FALLING);
 
     // power sensor init
-    ina3221.setAveragingMode(INA3221_AVG_16_SAMPLES);
+    // ina3221.setAveragingMode(INA3221_AVG_16_SAMPLES);
 
-    // Set shunt resistances for all channels to 0.05 ohms
-    for (uint8_t i = 0; i < 3; i++) {
-        ina3221.setShuntResistance(i, 0.05);
-    }
+    //Initialize PCA9685 Fan Controller
+    pwmBoard.setPWMFreq(1600); 
+    pinMode(fan_tach_pin, INPUT_PULLUP);
+    setExternalFanSpeed(pwmBoard, pwm_channel, target_speed_pct);
 
-    // Set a power valid alert to tell us if ALL channels are between the two
-    ina3221.setPowerValidLimits(2.0 /* lower limit */, 15.0 /* upper limit */);
+    // // Set shunt resistances for all channels to 0.05 ohms
+    // for (uint8_t i = 0; i < 3; i++) {
+    //     ina3221.setShuntResistance(i, 0.05);
+    // }
+
+    // // Set a power valid alert to tell us if ALL channels are between the two
+    // ina3221.setPowerValidLimits(2.0 /* lower limit */, 15.0 /* upper limit */);
 
 
     deviceState = DEVICE_STATE_INIT;
@@ -245,9 +280,14 @@ void loop() {
         }
         case DEVICE_STATE_SEND: {
             // 1. Collect Samples
-            int16_t windRaw = ads.readADC_SingleEnded(adcWinddirectionChannel);
+            int16_t windRaw = ads.readADC_SingleEnded(1);
+            // Convert raw value to Volts: (Raw * 0.125mV) / 1000
             float windVolts = (windRaw * 0.125) / 1000.0;
-            float degrees = getWindDirection(windVolts, 3.3);
+            int16_t refRaw = ads.readADC_SingleEnded(2);
+            float refVolts = (refRaw * 0.125) / 1000.0;
+            
+            // Use your utility function for degrees
+            float degrees = getWindDirection(windVolts, refVolts);
 
             //light intensity
             int16_t lightRaw = ads.readADC_SingleEnded(adcLightIntensityChannel);
@@ -260,14 +300,14 @@ void loop() {
             shtTempstats.update(sht.getTemperature());
             shtHumidityStats.update(sht.getHumidity());
 
-            //the power sensor
-            Ina3221Reading r = readIna3221Channel(ina3221, 0);
-            float voltage_V = r.voltage_V;
-            float current_mA = r.current_mA;
-            float power_mW = r.power_mW;
-            voltageStats.update(r.voltage_V);
-            currentStats.update(r.current_mA);
-            powerStats.update(r.power_mW);
+            // //the power sensor
+            // Ina3221Reading r = readIna3221Channel(ina3221, 0);
+            // float voltage_V = r.voltage_V;
+            // float current_mA = r.current_mA;
+            // float power_mW = r.power_mW;
+            // voltageStats.update(r.voltage_V);
+            // currentStats.update(r.current_mA);
+            // powerStats.update(r.power_mW);
 
             windDirectionTracker.update(degrees);
             windSpeedTracker.update();
@@ -295,7 +335,7 @@ void loop() {
                 rainTracker.reset(); // Resets the actual rain_pulse_count to 0
                 voltageStats.reset();
                 currentStats.reset();
-                powerStats.reset();
+                // powerStats.reset();
                 deviceState = DEVICE_STATE_CYCLE;
             } else {
                 // Not ready to send yet, just go back to sleep/cycle
