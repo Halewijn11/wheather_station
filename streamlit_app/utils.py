@@ -76,7 +76,11 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries = 1):
     df['received_at_td_minutes'] = df['received_at_td_seconds']/60
     now = pd.Timestamp.now(tz='UTC')
     df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
-    df['battery_percentage'] = df.apply(lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row['voltage_avg']), axis=1)
+    df['battery_percentage'] = df.apply(
+    lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row['voltage_avg']) 
+    if pd.notnull(row['voltage_avg']) else np.nan, 
+    axis=1
+    )
 
     return df
 
@@ -241,6 +245,9 @@ def calculate_stage_of_charge(discharge_curve, num_batteries, readout_voltage):
     return int(soc)
 
 def get_battery_icon_filepath(percentage, image_repo = './', flat = False):
+    # 1. Check for NaN or None before doing any math
+    if pd.isna(percentage):
+        return image_repo + "battery_unknown.png"
     # Ensure percentage is an integer
     p = int(percentage)
     insert = ''

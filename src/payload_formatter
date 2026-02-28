@@ -1,149 +1,3 @@
-// function decodeUplink(input) {
-//     var bytes = input.bytes;
-//     var cursor = 0;
-
-//     // Helper to read Unsigned Integers
-//     function readUint(size) {
-//         var value = 0;
-//         for (var i = 0; i < size; i++) {
-//             value = (value << 8) | bytes[cursor++];
-//         }
-//         return value >>> 0;
-//     }
-//     var payloadVersion = readUint(1);
-
-//     // 1. Wind Direction (2 bytes)
-//     var windDirAvg = readUint(2);
-
-//     // 2. Wind Speed (3 x 2 bytes: Total, Min, Max)
-//     var windSpeedTotal = readUint(2);
-//     var windSpeedMin = readUint(2);
-//     var windSpeedMax = readUint(2);
-
-//     // 3. BMP280 Temperature (3 x 2 bytes, multiplier 100)
-//     var bmpTempAvg = readUint(2) / 100.0;
-//     var bmpTempMin = readUint(2) / 100.0;
-//     var bmpTempMax = readUint(2) / 100.0;
-
-//     // 4. BMP280 Pressure (3 x 4 bytes, multiplier 100)
-//     // IMPORTANT: Since your C++ uses packValue(..., 4), we must read 4 bytes for each.
-//     var bmpPressAvg = readUint(4) / 100.0 / 100.0;
-//     var bmpPressMin = readUint(4) / 100.0 / 100.0;
-//     var bmpPressMax = readUint(4) / 100.0 / 100.0;
-
-//     // 5. Light Intensity (3 x 2 bytes, multiplier 100)
-//     var lightAvg = readUint(2) / 100.0;
-//     var lightMin = readUint(2) / 100.0;
-//     var lightMax = readUint(2) / 100.0;
-
-//     // 6. SHT Temperature (3 x 2 bytes, multiplier 100)
-//     var shtTempAvg = readUint(2) / 100.0;
-//     var shtTempMin = readUint(2) / 100.0;
-//     var shtTempMax = readUint(2) / 100.0;
-//     // 07. SHT Humidity (3 x 2 bytes, multiplier 100)
-//     var shtHumidAvg = readUint(2) / 100.0;
-//     var shtHumidMin = readUint(2) / 100.0;
-//     var shtHumidMax = readUint(2) / 100.0;
-
-//     // 8. Rain (2 bytes)
-//     var rainTotal = readUint(2);
-
-//     return {
-//         data: {
-//             wind: {
-//                 direction_deg: windDirAvg,
-//                 pulses_total: windSpeedTotal,
-//                 pulses_min: windSpeedMin,
-//                 pulses_max: windSpeedMax
-//             },
-//             bmp_temperature: {
-//                 avg: bmpTempAvg,
-//                 min: bmpTempMin,
-//                 max: bmpTempMax
-//             },
-//             pressure_pa: {
-//                 avg: bmpPressAvg,
-//                 min: bmpPressMin,
-//                 max: bmpPressMax
-//             },
-//             light_solar: {
-//                 avg: lightAvg,
-//                 min: lightMin,
-//                 max: lightMax
-//             },
-//             sht_temperature: {
-//                 avg: shtTempAvg,
-//                 min: shtTempMin,
-//                 max: shtTempMax
-//             },
-//             sht_humidity: {
-//                 avg: shtHumidAvg,
-//                 min: shtHumidMin,
-//                 max: shtHumidMax
-//             },
-//             rain_pulses: rainTotal
-//         }
-//     };
-// }
-
-
-// function decodeUplink(input) {
-//     var bytes = input.bytes;
-//     var cursor = 0;
-//     var data = {};
-
-//     // Helper to read Unsigned Integers
-//     function readUint(size) {
-//         var value = 0;
-//         for (var i = 0; i < size; i++) {
-//             value = (value << 8) | bytes[cursor++];
-//         }
-//         return value >>> 0;
-//     }
-
-//     // --- STEP 1: Peek at the version ---
-//     var payloadVersion = readUint(1);
-//     data.version = payloadVersion;
-
-//     // --- STEP 2: Decode based on version ---
-//     switch (payloadVersion) {
-//         case 2:
-//             // This is your NEW version with Electrical Stats
-//             data.wind = {
-//                 direction_deg: readUint(2),
-//                 pulses_total: readUint(2),
-//                 pulses_min: readUint(2),
-//                 pulses_max: readUint(2)
-//             };
-//             data.bmp_temperature = { avg: readUint(2)/100, min: readUint(2)/100, max: readUint(2)/100 };
-//             data.pressure_pa = { avg: readUint(4)/100, min: readUint(4)/100, max: readUint(4)/100 };
-//             data.light_solar = { avg: readUint(2)/100, min: readUint(2)/100, max: readUint(2)/100 };
-//             data.sht_temperature = { avg: readUint(2)/100, min: readUint(2)/100, max: readUint(2)/100 };
-//             data.sht_humidity = { avg: readUint(2)/100, min: readUint(2)/100, max: readUint(2)/100 };
-//             data.rain_pulses = readUint(2);
-            
-//             // Added Electrical for Version 1
-//             data.electrical = {
-//                 voltage_v: { avg: readUint(2)/100, min: readUint(2)/100, max: readUint(2)/100 },
-//                 current_ma: { avg: readUint(2)/100, min: readUint(2)/100, max: readUint(2)/100 },
-//                 power_mw: { avg: readUint(2)/100, min: readUint(2)/100, max: readUint(2)/100 }
-//             };
-//             break;
-
-//         case 0: 
-//             // This would be your OLD version (if it didn't have the version byte or electrical)
-//             // Note: If your VERY first code didn't have a version byte, 
-//             // the decoder will actually fail because the cursor is offset by 1.
-//             data.error = "Legacy payload without versioning detected";
-//             break;
-
-//         default:
-//             data.error = "Unknown payload version: " + payloadVersion;
-//     }
-
-//     return { data: data };
-// }
-
 function decodeUplink(input) {
     var bytes = input.bytes;
     var cursor = 0;
@@ -270,6 +124,86 @@ function decodeUplink(input) {
                 }
             };
             break;
+            
+        case 2: // New Version: Weather Station + RPM (No Power/Volt/Curr)
+                    
+                    // 01. Wind Direction
+                    var v2_windDirAvg = readUint(2);
+
+                    // 02. Wind Speed
+                    var v2_windSpeedTotal = readUint(2);
+                    var v2_windSpeedMin = readUint(2);
+                    var v2_windSpeedMax = readUint(2);
+
+                    // 03. BMP280 Temperature
+                    var v2_bmpTempAvg = readUint(2) / 100.0;
+                    var v2_bmpTempMin = readUint(2) / 100.0;
+                    var v2_bmpTempMax = readUint(2) / 100.0;
+
+                    // 04. BMP280 Pressure
+                    var v2_bmpPressAvg = readUint(4) / 100.0;
+                    var v2_bmpPressMin = readUint(4) / 100.0;
+                    var v2_bmpPressMax = readUint(4) / 100.0;
+
+                    // 05. Light Intensity
+                    var v2_lightAvg = readUint(2) / 100.0;
+                    var v2_lightMin = readUint(2) / 100.0;
+                    var v2_lightMax = readUint(2) / 100.0;
+
+                    // 06. SHT Temperature
+                    var v2_shtTempAvg = readUint(2) / 100.0;
+                    var v2_shtTempMin = readUint(2) / 100.0;
+                    var v2_shtTempMax = readUint(2) / 100.0;
+
+                    // 07. SHT Humidity
+                    var v2_shtHumidAvg = readUint(2) / 100.0;
+                    var v2_shtHumidMin = readUint(2) / 100.0;
+                    var v2_shtHumidMax = readUint(2) / 100.0;
+
+                    // 08. Rain
+                    var v2_rainTotal = readUint(2);
+
+                    // 09. RPM (New Field - 2 bytes)
+                    var v2_rpm = readUint(2);
+
+                    // --- Construct the Final Object ---
+                    data = {
+                        version: payloadVersion,
+                        wind: {
+                            direction_deg: v2_windDirAvg,
+                            pulses_total: v2_windSpeedTotal,
+                            pulses_min: v2_windSpeedMin,
+                            pulses_max: v2_windSpeedMax
+                        },
+                        bmp_temperature: {
+                            avg: v2_bmpTempAvg,
+                            min: v2_bmpTempMin,
+                            max: v2_bmpTempMax
+                        },
+                        pressure_pa: {
+                            avg: v2_bmpPressAvg,
+                            min: v2_bmpPressMin,
+                            max: v2_bmpPressMax
+                        },
+                        light_solar: {
+                            avg: v2_lightAvg,
+                            min: v2_lightMin,
+                            max: v2_lightMax
+                        },
+                        sht_temperature: {
+                            avg: v2_shtTempAvg,
+                            min: v2_shtTempMin,
+                            max: v2_shtTempMax
+                        },
+                        sht_humidity: {
+                            avg: v2_shtHumidAvg,
+                            min: v2_shtHumidMin,
+                            max: v2_shtHumidMax
+                        },
+                        rain_pulses: v2_rainTotal,
+                        rpm: v2_rpm
+                    };
+                    break;
 
         default:
             data.error = "Unknown Payload Version: " + payloadVersion;

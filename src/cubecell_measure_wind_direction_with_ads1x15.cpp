@@ -25,14 +25,18 @@ void loop() {
   int16_t windRaw = ads.readADC_SingleEnded(1);
   // Convert raw value to Volts: (Raw * 0.125mV) / 1000
   float windVolts = (windRaw * 0.125) / 1000.0;
+  int16_t refRaw = ads.readADC_SingleEnded(2);
+  float refVolts = (refRaw * 0.125) / 1000.0;
   
   // Use your utility function for degrees
-  float degrees = getWindDirection(windVolts, 3.3);
+  float degrees = getWindDirection(windVolts, refVolts);
   
 
   // --- 3. PRINT RESULTS ---
   Serial.print("Wind Vane: ");
   Serial.print(windVolts, 3);
+  Serial.print("V -> Reference: ");
+  Serial.print(refVolts, 3);
   Serial.print("V -> Direction: ");
   Serial.println(degrees, 1);
 

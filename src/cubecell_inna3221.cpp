@@ -14,11 +14,12 @@ void setup() {
   Serial.println("Adafruit INA3221 simple test");
 
   // Initialize the INA3221
-  if (!ina3221.begin(0x40, &Wire)) { // can use other I2C addresses or buses
-    Serial.println("Failed to find INA3221 chip");
-    while (1)
-      delay(10);
-  }
+  // if (!ina3221.begin(0x40, &Wire)) { // can use other I2C addresses or buses
+  //   Serial.println("Failed to find INA3221 chip");
+  //   while (1)
+  //     delay(10);
+  // }
+  ina3221.begin(0x40, &Wire);
   Serial.println("INA3221 Found!");
 
   ina3221.setAveragingMode(INA3221_AVG_16_SAMPLES);

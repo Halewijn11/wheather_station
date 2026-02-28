@@ -92,46 +92,61 @@ col1,col2, buffer = st.columns([7, 20,30])
 with col1:
     st.image(img_filepath, width=100) 
 
+if pd.isna(battery_percentage):
+    battery_percentage_str = "N/A"
+else:
+    battery_percentage_str = f"{int(battery_percentage)}%"
 with col2:
     # Adjust the 'px' value (e.g., 25px) to move the text lower or higher
     st.markdown(
-        f"""
+        f"""f
         <div style="margin-top: 4px; font-size: 20px; font-weight: bold;">
-            {int(battery_percentage)}%
+            {battery_percentage_str}
         </div>
         """, 
         unsafe_allow_html=True
     )
 
-# #--------------------- power -----------------------------
+# # #--------------------- power -----------------------------
+# utils.plot_metric_with_graph(
+#     time_window_df = time_window_df,
+#     y_variable_colname = 'power_avg',
+#     y_variable_unit = 'mW',
+#     y_variable_prefix_text = 'avg power',
+#     y_label = "power (mW)",
+#     x_label = 'received at'
+# )
+
+# # #--------------------- battery_percentage -----------------------------
+# utils.plot_metric_with_graph(
+#     time_window_df = time_window_df,
+#     y_variable_colname = 'battery_percentage',
+#     y_variable_unit = '%',
+#     y_variable_prefix_text = 'battery percentage',
+#     y_label = "battery percentage (%)",
+#     x_label = 'received at'
+# )
+
+# # #--------------------- battery_voltage -----------------------------
+# utils.plot_metric_with_graph(
+#     time_window_df = time_window_df,
+#     y_variable_colname = 'voltage_avg',
+#     y_variable_unit = 'V',
+#     y_variable_prefix_text = 'avg voltage',
+#     y_label = "voltage (V)",
+#     x_label = 'received at'
+# )
+
+# # #--------------------- fan_rpm -----------------------------
 utils.plot_metric_with_graph(
     time_window_df = time_window_df,
-    y_variable_colname = 'power_avg',
-    y_variable_unit = 'mW',
-    y_variable_prefix_text = 'avg power',
-    y_label = "power (mW)",
+    y_variable_colname = 'rpm',
+    y_variable_unit = 'RPM',
+    y_variable_prefix_text = 'RPM',
+    y_label = "RPM",
     x_label = 'received at'
 )
 
-# #--------------------- battery_percentage -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'battery_percentage',
-    y_variable_unit = '%',
-    y_variable_prefix_text = 'battery percentage',
-    y_label = "battery percentage (%)",
-    x_label = 'received at'
-)
-
-# #--------------------- battery_voltage -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'voltage_avg',
-    y_variable_unit = 'V',
-    y_variable_prefix_text = 'avg voltage',
-    y_label = "voltage (V)",
-    x_label = 'received at'
-)
 
 # #--------------------- snr -----------------------------
 utils.plot_metric_with_graph(
