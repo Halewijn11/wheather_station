@@ -92,15 +92,15 @@ uint8_t confirmedNbTrials = 4;
  ****************************************************/
 
 /* Weather Station Variables */
-uint32_t numSamples = 15; 
-uint32_t measurementInterval_s = 1;
+uint32_t numSamples = 60; 
+uint32_t measurementInterval_s = 5;
 int sampleCount = 0;
 
 // Fan Specifics
 Adafruit_PWMServoDriver pwmBoard = Adafruit_PWMServoDriver();
 const int fan_tach_pin = GPIO1;  
 const int pwm_channel = 0;   
-const int target_speed_pct = 50; 
+int target_speed_pct = 50; 
 const int fan_speed_measurement_timems = 500;
 
 /* Sensor Objects */
@@ -138,6 +138,28 @@ uint32_t adcLightIntensityChannel = 0;
 // Increment this whenever you change the payload structure
 uint8_t payloadVersion = 2; 
 
+void downLinkDataHandle(McpsIndication_t *mcpsIndication) {
+    Serial.printf("Downlink received: Port %d, Size %d\r\n", mcpsIndication->Port, mcpsIndication->BufferSize);
+
+    if (mcpsIndication->BufferSize > 0) {
+        // We assume the first byte of the downlink is the target percentage (0-100)
+        uint8_t receivedPct = mcpsIndication->Buffer[0];
+
+        if (receivedPct <= 100) {
+            target_speed_pct = receivedPct;
+            
+            // Apply the new speed immediately
+            setExternalFanSpeed(pwmBoard, pwm_channel, target_speed_pct);
+            
+            Serial.print("New Fan Speed Set via Downlink: ");
+            Serial.print(target_speed_pct);
+            Serial.println("%");
+        } else {
+            Serial.println("Invalid percentage received (>100)");
+        }
+    }
+}
+
 /* Prepares the payload of the frame */
 static void prepareTxFrame( uint8_t port ) {
     // 1. MEASURE FAN RPM (Only happens once per uplink)
@@ -172,6 +194,7 @@ static void prepareTxFrame( uint8_t port ) {
     lightIntensityStats.print("light",sampleCount);
     shtTempstats.print("sht temp",sampleCount);
     shtHumidityStats.print("sht humidity",sampleCount);
+    rainTracker.print();
     // print all the stats
     // voltageStats.print("Voltage (V)", sampleCount);
     // currentStats.print("Current (mA)", sampleCount);
@@ -290,10 +313,7 @@ void loop() {
             float degrees = getWindDirection(windVolts, refVolts);
 
             //light intensity
-            int16_t lightRaw = ads.readADC_SingleEnded(adcLightIntensityChannel);
-            float lightsensor_millivolts = lightRaw * 0.125;
-            float solarRadiation = lightsensor_millivolts / 1.67;
-            if (solarRadiation < 0) solarRadiation = 0; // save from negative readings
+            float solarRadiation = getSolarRadiation(ads, adcLightIntensityChannel, 2);
             
             //the sht sensor
             sht.read(); 

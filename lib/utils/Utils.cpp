@@ -97,10 +97,12 @@ volatile unsigned int rain_pulse_count = 0;
 void rain_Counter() {
   unsigned long current_micros = micros();
     // Ignore pulses that happen within 200,000 microseconds (200ms) of each other
-  if (current_micros - last_micros > 200000) {
+  if (current_micros - last_micros > 800000) {
     rain_pulse_count++;
+    // Serial.println("pulse!");
     last_micros = current_micros;
   }
+  
   // Serial.println("total read rain pulses:");
   // Serial.println(rain_pulse_count);
 }
@@ -134,19 +136,22 @@ float getWindDirection(float voltage, float maxVoltage) {
 }
 
 // ##################### everything for light sensor ###############################3
-float getSolarRadiation(Adafruit_ADS1115& ads, uint8_t channel) {
-    // 1. Read the raw ADC value from the specified channel
-    int16_t rawResult = ads.readADC_SingleEnded(channel);
-    
-    // 2. Noise floor safety: If the reading is slightly negative due to noise, set to 0
-    if (rawResult < 0) rawResult = 0;
+float getSolarRadiation(Adafruit_ADS1115& ads, uint8_t signalChannel, uint8_t refChannel) {
+    // 1. Read the signal from the solar sensor
+    int16_t rawSignal = ads.readADC_SingleEnded(signalChannel);
+    // 2. Read the reference voltage (excitation voltage)
+    int16_t rawRef = ads.readADC_SingleEnded(refChannel);
 
-    // 3. Convert raw value to millivolts 
-    // GAIN_ONE: 1 bit = 0.125mV
-    float millivolts = rawResult * 0.125;
+    // 3. Safety: Handle negative noise
+    if (rawSignal < 0) rawSignal = 0;
     
-    // 4. Davis 6450 Scale: 1.67 mV per W/m^2
-    float solarRadiation = millivolts / 1.67;
+    // 4. Prevent division by zero if reference is missing/disconnected
+    if (rawRef <= 0) return 0.0; 
+
+    // 5. Ratiometric Calculation: (Signal / Reference) * 1800
+    // Note: Since both use the same Gain, we can use raw ADC steps 
+    // because the 0.125mV multiplier would just cancel itself out.
+    float solarRadiation = ((float)rawSignal / (float)rawRef) * 1800.0;
 
     return solarRadiation;
 }
