@@ -20,8 +20,7 @@ void wind_Counter();
 float getWindDirection(float voltage, float maxVoltage);
 
 // ##################### everything for the light sensor ###############################3
-float getSolarRadiation(Adafruit_ADS1115& ads, uint8_t channel);
-
+float getSolarRadiation(Adafruit_ADS1115& ads, uint8_t signalChannel, uint8_t refChannel);
 
 int readFanSpeed();
 void setExternalFanSpeed(Adafruit_PWMServoDriver& pwmBoard, int pwm_channel, int percent);
