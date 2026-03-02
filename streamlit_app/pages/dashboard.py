@@ -104,108 +104,90 @@ with buffer:
 
 
 # #--------------------- button for time window -----------------------------
-time_options = {
-    "Last Hour": 1,
-    "Last 24 Hours": 24,
-    "Last Week": 168  # 24 * 7
-}
+time_options = [
+    "Last Hour",
+    "Last 24 Hours",
+    "Last 7 Days",
+    "Since Midnight",
+    "This Week",
+    "This Month"
+]
 
 # Create the dropdown (selectbox)
 selected_label = st.selectbox(
     "Select Time Range:",
-    options=list(time_options.keys()),
+    options=time_options,
     index=0  # Default to "Last Hour"
 )
 
-# Get the numeric value based on selection
-time_window_hours = time_options[selected_label]
-
-# Now filter your data using this dynamic variable
-time_window_df = utils.filter_by_recency(df, hours=time_window_hours)
-
-
-# #--------------------- sample the dataframe to a lower resolution -----------------------------
-
-
-# 2. Filter by the number of hours defined in our config
-filtered_df = utils.filter_by_recency(df, hours = time_window_hours, mode = time_window_filtering_mode)
+# Filter by the label defined in our config
+filtered_df = utils.filter_by_recency(df, window_label=selected_label, mode=time_window_filtering_mode)
 
 # 3. Apply the resolution defined in our config
 time_window_df = utils.resample_data(filtered_df, selected_label)
 
 
 # #--------------------- temperature -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'sht_temperature_avg',
-    y_variable_unit = '°C',
-    y_variable_prefix_text = 'Temperature',
-    y_label = "Temp (°C)",
-    x_label = 'received at'
-)
+utils.TimeSeriesDashboardItem(
+    metric_title="Temperature", 
+    unit="°C", 
+    y_col_main="sht_temperature_avg", 
+    y_col_main_label="Average",
+    main_color="#1E90FF" # Reddish
+).add_extra_series(
+    col_name="sht_temperature_max", 
+    label="Max", 
+    color="#1E90FF" # Salmon
+).plot(time_window_df)
 
 # #--------------------- humidity -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'sht_humidity_avg',
-    y_variable_unit = '%',
-    y_variable_prefix_text = 'Humidity',
-    y_label = "Humidity (%)",
-    x_label = 'received at'
-)
-
+utils.TimeSeriesDashboardItem(
+    metric_title="Humidity", 
+    unit="%", 
+    y_col_main="sht_humidity_avg", 
+    y_col_main_label="Average",
+    main_color="#1E90FF" # Blue
+).plot(time_window_df)
 
  # #--------------------- pressure -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'bmp_pressure_avg',
-    y_variable_unit = 'hPa',
-    y_variable_prefix_text = 'Pressure',
-    y_label = "Pressure (hPa)",
-    x_label = 'received at'
-)
-
+utils.TimeSeriesDashboardItem(
+    metric_title="Pressure", 
+    unit="hPa", 
+    y_col_main="bmp_pressure_avg", 
+    main_color="#1E90FF" # Blue
+).plot(time_window_df)
 
  # #--------------------- light intensity -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'light_intensity_avg',
-    y_variable_unit = 'W/m²',
-    y_variable_prefix_text = 'Light intensity',
-    y_label = "Light intensity (W/m²)",
-    x_label = 'received at'
-)
+utils.TimeSeriesDashboardItem(
+    metric_title="Light intensity", 
+    unit="W/m²", 
+    y_col_main="light_intensity_avg", 
+    main_color="#1E90FF" # Gold
+).plot(time_window_df)
 
  # #--------------------- wind speed -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'wind_pulses_total',
-    y_variable_unit = '',
-    y_variable_prefix_text = 'wind pulses',
-    y_label = "Wind pulses",
-    x_label = 'received at'
-)
-
+utils.TimeSeriesDashboardItem(
+    metric_title="Wind pulses", 
+    unit="", 
+    y_col_main="wind_pulses_total", 
+    main_color="#1E90FF" # Grey
+).plot(time_window_df)
 
  # #--------------------- wind direction -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'wind_direction',
-    y_variable_unit = '',
-    y_variable_prefix_text = 'wind direction',
-    y_label = "Wind direction",
-    x_label = 'received at'
-)
+utils.TimeSeriesDashboardItem(
+    metric_title="Wind direction", 
+    unit="°", 
+    y_col_main="wind_direction", 
+    main_color="#1E90FF" # Purple
+).plot(time_window_df)
 
  # #--------------------- rain pulses -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'rain_pulses',
-    y_variable_unit = '',
-    y_variable_prefix_text = 'rain pulses',
-    y_label = "rain pulses",
-    x_label = 'received at'
-)
+utils.TimeSeriesDashboardItem(
+    metric_title="Rain pulses", 
+    unit="", 
+    y_col_main="rain_pulses", 
+    main_color="#1E90FF" # Turquoise
+).plot(time_window_df)
 
 #  #--------------------- wind direction as a function of tiem -----------------------------
 # radial_coords_df = utils.transform_to_radial_cartesian(time_window_df,'received_at', 'wind_direction')
