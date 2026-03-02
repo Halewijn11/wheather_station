@@ -3,6 +3,7 @@
 # some usefull links
 link to the streamlit stie: https://wheatherstation-e9gurrh3q7eo7ik2g4dzda.streamlit.app/status   
 link to streamlit workspace: https://share.streamlit.io/      
+link to datacake server: https://app.datacake.de/wheather_station/devices/d/b278aa3c-d8ee-4660-b672-fcaf78d19b36/t/debug          
 link to the things network: https://eu1.cloud.thethings.network/console/  
 link to thingspeak channel: https://thingspeak.mathworks.com/channels/3194176/private_show 
 google appscript: https://script.google.com/home/    
