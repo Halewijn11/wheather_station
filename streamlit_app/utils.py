@@ -536,7 +536,12 @@ class TimeSeriesDashboardItem:
                         scale=alt.Scale(domain=y_domain, clamp=True)),
                 color=alt.Color("Variable:N", 
                                 scale=color_scale,
-                                legend=alt.Legend(orient="bottom") if len(labels) > 1 else None)
+                                title=None, # Remove the "Variable" title from legend
+                                legend=alt.Legend(
+                                    orient="bottom",
+                                    symbolType='stroke', # Use a line/stroke instead of a dot
+                                    symbolStrokeWidth=3
+                                ) if len(labels) > 1 else None)
             )
 
             # 2. Mark Type
@@ -549,15 +554,20 @@ class TimeSeriesDashboardItem:
             nearest = alt.selection_point(on='mouseover', nearest=True, fields=[x_col], 
                                           encodings=['x'], empty=False)
 
+            # Build the multiline tooltip list (Show ALL variables in one box)
+            tooltip_list = [alt.Tooltip(f"{x_col}:T", title="Time", format='%H:%M')]
+            # Add main series
+            tooltip_list.append(alt.Tooltip(f"{self.y_col_main}:Q", title=self.y_col_main_label, format='.2f'))
+            # Add extra series values
+            for s in self.extra_y_series:
+                tooltip_list.append(alt.Tooltip(f"{s['col']}:Q", title=s['label'], format='.2f'))
+
             # Invisible selectors for better mouse target
-            selectors = alt.Chart(melted_df).mark_rule().encode(
+            # Note: We use the original 'df' here to have access to all columns at once
+            selectors = alt.Chart(df).mark_rule().encode(
                 x=f"{x_col}:T",
                 opacity=alt.value(0),
-                tooltip=[
-                    alt.Tooltip(f"{x_col}:T", title="Time", format='%H:%M'),
-                    alt.Tooltip("Variable:N"),
-                    alt.Tooltip("Value:Q", title="Value", format='.2f')
-                ]
+                tooltip=tooltip_list
             ).add_params(nearest)
 
             # Horizontal line for hover
