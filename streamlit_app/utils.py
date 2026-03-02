@@ -3,11 +3,12 @@ import streamlit as st
 import altair as alt
 from astral import LocationInfo
 from astral.sun import sun
-from datetime import date
+from datetime import date, timedelta
 import numpy as np
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 import os
+import pytz
 
 def get_google_sheet_df(sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
     # Construct the base export URL
@@ -25,29 +26,57 @@ def get_full_payload_colname(col_name):
 
 # def get_metadata_google_sheet_col_name(col_name):
 #     return f"uplink_message_decoded_payload{col_name}"
-def filter_by_recency(df, hours=0, minutes=0, seconds=0, 
+def filter_by_recency(df, window_label=None, hours=0, minutes=0, seconds=0, 
                       time_colname = 'seconds_since_now', 
                       colname_unit = 'seconds', mode = 'live'):
     """
     Filters the dataframe to only include rows from 'now' back to a specific duration.
+    Also supports semantic window labels (Since Midnight, This Week, This Month).
     """
-    # 1. Calculate the total window in minutes
-    total_window_seconds = (hours * 3600) + (minutes*60) + (seconds)
+    if df.empty:
+        return df
+
+    tz = pytz.timezone('Europe/Brussels')
+    now = datetime.now(tz)
+    
+    # 1. Handle semantic window labels
+    if window_label:
+        if window_label == "Last Hour":
+            total_window_seconds = 3600
+        elif window_label == "Last 24 Hours":
+            total_window_seconds = 24 * 3600
+        elif window_label == "Last 7 Days":
+            total_window_seconds = 7 * 24 * 3600
+        elif window_label == "Since Midnight":
+            midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            total_window_seconds = (now - midnight).total_seconds()
+        elif window_label == "This Week":
+            # Monday is 0, Sunday is 6
+            days_since_monday = now.weekday()
+            monday_midnight = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+            total_window_seconds = (now - monday_midnight).total_seconds()
+        elif window_label == "This Month":
+            first_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            total_window_seconds = (now - first_of_month).total_seconds()
+        else:
+            total_window_seconds = (hours * 3600) + (minutes * 60) + seconds
+    else:
+        # Default to provided hours/mins/secs
+        total_window_seconds = (hours * 3600) + (minutes * 60) + seconds
     
     # 2. Filter the dataframe
-    # We want rows where the 'minutes_since_now' is less than or equal to our window
     if mode == 'live':
         mask = df[time_colname] <= total_window_seconds
         filtered_df = df.loc[mask].copy()
         return filtered_df
     elif mode == 'last_session': 
-        latest_recorded_second = df['seconds_since_now'].min() # assuming 0 is 'now'
-        limit = latest_recorded_second + (total_window_seconds)
+        latest_recorded_second = df['seconds_since_now'].min()
+        limit = latest_recorded_second + total_window_seconds
         mask = df[time_colname] <= limit
         filtered_df = df.loc[mask].copy()
         return filtered_df
-
-    # return filtered_df
+    
+    return df
 
 
 def filter_data(df, window_hours=1, mode='live'):
@@ -103,9 +132,13 @@ def resample_data(df, window_label):
     # Define resolution based on selection
     if window_label == "Last Hour":
         return df.reset_index() # Raw data (no change)
-    elif window_label == "Last 24 Hours":
+    elif window_label in ["Last 24 Hours", "Since Midnight"]:
         resample_rate = '5min'
-    else: # Last Week
+    elif window_label in ["This Week", "Last 7 Days"]:
+        resample_rate = '1H'
+    elif window_label == "This Month":
+        resample_rate = '3H' # Larger window, larger step
+    else:
         resample_rate = '1H'
     
     # Resample numeric columns only, then reset index to keep 'received_at'
@@ -429,116 +462,119 @@ def plot_data_altair_hover(df, y_variable_colname, x_variable_colname='received_
     return st.altair_chart(layered_chart, use_container_width=True)
 
 
-import streamlit as st
-import altair as alt
-
-def plot_data_altair_final(df, y_variable_colname, x_variable_colname='received_at', 
-                          chart_type='line', x_label=None, y_label=None, 
-                          x_limits=None, y_limits='auto', show_ticks=True, height = 200):
-    
-    # 1. HANDLE Y-LIMITS
-    if y_limits == 'auto':
-        y_min = float(df[y_variable_colname].min())
-        y_max = float(df[y_variable_colname].max())
-        padding = (y_max - y_min) * 0.1 if y_max != y_min else 1
-        y_domain = [y_min - padding, y_max + padding]
-    elif isinstance(y_limits, list):
-        y_domain = y_limits
-    else:
-        y_domain = alt.Undefined
-
-    # 2. HANDLE X-LIMITS
-    x_domain = x_limits if isinstance(x_limits, list) else alt.Undefined
-
-    # 3. BASE ENCODING
-    base = alt.Chart(df).encode(
-        x=alt.X(f"{x_variable_colname}:T", 
-                title=x_label or x_variable_colname,
-                scale=alt.Scale(domain=x_domain),
-                axis=alt.Axis(ticks=show_ticks, labels=show_ticks)),
-        y=alt.Y(f"{y_variable_colname}:Q", 
-                title=y_label or y_variable_colname,
-                scale=alt.Scale(domain=y_domain, clamp=True),
-                axis=alt.Axis(ticks=show_ticks, labels=show_ticks))
-    )
-
-    # 4. MAIN CHART TYPE
-    if chart_type == 'bar':
-        main_chart = base.mark_bar()
-    elif chart_type == 'area':
-        main_chart = base.mark_area(opacity=0.5)
-    else:
-        main_chart = base.mark_line(strokeWidth=2)
-
-    # 5. HOVER INTERACTIVITY LOGIC
-    # Create a selection that snaps to the X-axis (time) only
-    nearest = alt.selection_point(
-        on='mouseover', 
-        nearest=True, 
-        fields=[x_variable_colname], 
-        encodings=['x'], 
-        empty=False
-    )
-
-    # Invisible selectors (Rule) to capture mouse anywhere on the vertical plane
-    # We attach the tooltip HERE so it shows up for the whole vertical area
-    selectors = alt.Chart(df).mark_rule().encode(
-        x=f"{x_variable_colname}:T",
-        opacity=alt.value(0),
-        tooltip=[
-            alt.Tooltip(f"{x_variable_colname}:T", title=x_label or "Time", format='%Y-%m-%d %H:%M'),
-            alt.Tooltip(f"{y_variable_colname}:Q", title=y_label or "Value", format='.2f')
-        ]
-    ).add_params(nearest)
-
-    # The visible vertical guide line
-    rules = alt.Chart(df).mark_rule(color='#A1A6B4', strokeDash=[4,4]).encode(
-        x=f"{x_variable_colname}:T",
-    ).transform_filter(nearest)
-
-    # The point that appears on the line during hover
-    points = base.mark_point(color='red', size=60).encode(
-        opacity=alt.condition(nearest, alt.value(1), alt.value(0))
-    )
-
-    # 6. LAYER AND RENDER
-    # We stack them: line -> selectors -> rules -> points
-    layered_chart = alt.layer(
-        main_chart, selectors, rules, points
-    ).properties(
-        width='container',
-        height=height,
-    ).interactive()
-
-    return st.altair_chart(layered_chart, use_container_width=True)
-
-
-def plot_metric_with_graph(time_window_df, y_variable_colname, y_variable_unit, 
-                           y_variable_prefix_text, y_label, x_label='received at', x_variable_colname = 'received_at'):
+class TimeSeriesDashboardItem:
     """
-    Creates a row with a Streamlit metric on the left and 
-    the custom Altair snapping chart on the right.
+    Represent a metric card with an associated time-series plot.
+    Highly configurable for multiple Y-variables, specialized labels, and custom colors.
     """
-    col1, col2 = st.columns([1, 2])
-    
-    # Get the most recent value from the dataframe
-    if not time_window_df.empty:
-        latest = time_window_df[y_variable_colname].iloc[-1]
-    else:
-        latest = 0.0
+    def __init__(self, metric_title, unit, y_col_main, 
+                 y_col_main_label=None, main_color='#1f77b4'):
+        self.metric_title = metric_title
+        self.unit = unit
+        self.y_col_main = y_col_main
+        self.y_col_main_label = y_col_main_label or metric_title
+        self.main_color = main_color
+        
+        # Lists for extra configuration
+        self.extra_y_series = [] # List of dicts: {'col': str, 'label': str, 'color': str}
 
-    with col1:
-        st.metric(f"{y_variable_prefix_text}", f"{latest:.1f} {y_variable_unit}")
+    def add_extra_series(self, col_name, label=None, color=None):
+        self.extra_y_series.append({
+            'col': col_name,
+            'label': label or col_name,
+            'color': color # If None, Altair default
+        })
+        return self # Allow chaining
 
-    with col2:
-        # Calling your optimized Altair function
-        plot_data_altair_final(
-            time_window_df, 
-            y_variable_colname=y_variable_colname,
-            x_label=x_label,
-            y_label=y_label,
-            x_variable_colname = x_variable_colname
-        )
+    def _prepare_data(self, df, x_col):
+        # Collect all columns and their intended labels
+        cols = [self.y_col_main] + [s['col'] for s in self.extra_y_series]
+        labels = [self.y_col_main_label] + [s['label'] for s in self.extra_y_series]
+        colors = [self.main_color] + [s['color'] for s in self.extra_y_series if s['color']]
+        
+        # Melt dataframe for Altair
+        df_plot = df.copy()
+        # Rename columns to labels before melting for easier Altair logic
+        rename_dict = {self.y_col_main: self.y_col_main_label}
+        for s in self.extra_y_series:
+            rename_dict[s['col']] = s['label']
+        
+        df_plot = df_plot.rename(columns=rename_dict)
+        melted = df_plot.melt(id_vars=[x_col], value_vars=labels, 
+                             var_name='Variable', value_name='Value')
+        return melted, labels, colors
+
+    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None):
+        if df.empty:
+            st.warning(f"No data for {self.metric_title}")
+            return
+
+        col1, col2 = st.columns([1, 2])
+        
+        latest_val = df[self.y_col_main].iloc[-1]
+        with col1:
+            st.metric(self.metric_title, f"{latest_val:.1f} {self.unit}")
+
+        with col2:
+            melted_df, labels, colors = self._prepare_data(df, x_col)
+            
+            # 1. Base Encoding
+            # Calculate Y-axis domain
+            y_min = float(melted_df['Value'].min())
+            y_max = float(melted_df['Value'].max())
+            padding = (y_max - y_min) * 0.1 if y_max != y_min else 1
+            y_domain = [y_min - padding, y_max + padding]
+
+            color_scale = alt.Undefined
+            if any(colors):
+                # Only apply custom scale if colors are provided
+                color_scale = alt.Scale(domain=labels, range=colors)
+
+            base = alt.Chart(melted_df).encode(
+                x=alt.X(f"{x_col}:T", title=None),
+                y=alt.Y("Value:Q", title=y_label or self.unit, 
+                        scale=alt.Scale(domain=y_domain, clamp=True)),
+                color=alt.Color("Variable:N", 
+                                scale=color_scale,
+                                legend=alt.Legend(orient="bottom") if len(labels) > 1 else None)
+            )
+
+            # 2. Mark Type
+            if chart_type == 'area':
+                main_mark = base.mark_area(opacity=0.4)
+            else:
+                main_mark = base.mark_line(strokeWidth=2)
+
+            # 3. Interactivity (The Snapping Hover)
+            nearest = alt.selection_point(on='mouseover', nearest=True, fields=[x_col], 
+                                          encodings=['x'], empty=False)
+
+            # Invisible selectors for better mouse target
+            selectors = alt.Chart(melted_df).mark_rule().encode(
+                x=f"{x_col}:T",
+                opacity=alt.value(0),
+                tooltip=[
+                    alt.Tooltip(f"{x_col}:T", title="Time", format='%H:%M'),
+                    alt.Tooltip("Variable:N"),
+                    alt.Tooltip("Value:Q", title="Value", format='.2f')
+                ]
+            ).add_params(nearest)
+
+            # Horizontal line for hover
+            rules = alt.Chart(melted_df).mark_rule(color='#A1A6B4', strokeDash=[4,4]).encode(
+                x=f"{x_col}:T",
+            ).transform_filter(nearest)
+
+            # Points appearing on the line(s)
+            points = base.mark_point(size=60).encode(
+                opacity=alt.condition(nearest, alt.value(1), alt.value(0))
+            )
+
+            chart = alt.layer(main_mark, selectors, rules, points).properties(
+                width='container', height=height
+            ).interactive()
+
+            st.altair_chart(chart, use_container_width=True)
 
 
 def transform_to_radial_cartesian(df, time_col, degree_col):
