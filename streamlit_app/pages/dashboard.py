@@ -117,14 +117,19 @@ time_options = [
 selected_label = st.selectbox(
     "Select Time Range:",
     options=time_options,
-    index=0  # Default to "Last Hour"
+    index=time_options.index("Since Midnight")  # Default to "Since Midnight"
 )
 
 # Filter by the label defined in our config
 filtered_df = utils.filter_by_recency(df, window_label=selected_label, mode=time_window_filtering_mode)
 
 # 3. Apply the resolution defined in our config
-time_window_df = utils.resample_data(filtered_df, selected_label)
+time_window_df = utils.resample_data(
+    filtered_df, 
+    selected_label, 
+    sum_cols=['rain_pulses', 'wind_pulses_total'],
+    cumulative_cols=['rain_pulses']
+)
 
 
 # #--------------------- temperature -----------------------------
@@ -132,11 +137,11 @@ utils.TimeSeriesDashboardItem(
     metric_title="Temperature", 
     unit="°C", 
     y_col_main="sht_temperature_avg", 
-    y_col_main_label="Average",
+    y_col_main_label="average",
     main_color="#1E90FF" # Reddish
 ).add_extra_series(
     col_name="sht_temperature_max", 
-    label="Max", 
+    label="max", 
     color="#1E90FF" # Salmon
 ).plot(time_window_df)
 
@@ -145,7 +150,7 @@ utils.TimeSeriesDashboardItem(
     metric_title="Humidity", 
     unit="%", 
     y_col_main="sht_humidity_avg", 
-    y_col_main_label="Average",
+    y_col_main_label="average",
     main_color="#1E90FF" # Blue
 ).plot(time_window_df)
 
@@ -179,14 +184,19 @@ utils.TimeSeriesDashboardItem(
     unit="°", 
     y_col_main="wind_direction", 
     main_color="#1E90FF" # Purple
-).plot(time_window_df)
+).plot(time_window_df, y_limits=[0, 360])
 
  # #--------------------- rain pulses -----------------------------
 utils.TimeSeriesDashboardItem(
     metric_title="Rain pulses", 
     unit="", 
     y_col_main="rain_pulses", 
+    y_col_main_label="rain pulses",
     main_color="#1E90FF" # Turquoise
+).add_extra_series(
+    col_name="rain_pulses_cumulated",
+    label="cummulated rain pulses",
+    color="#00CED1"
 ).plot(time_window_df)
 
 #  #--------------------- wind direction as a function of tiem -----------------------------

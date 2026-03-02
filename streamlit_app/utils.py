@@ -124,15 +124,23 @@ def get_data(discharge_curve):
     df = tidy_google_sheet_df(google_sheet_df, discharge_curve)
     return df
 
-def resample_data(df, window_label):
+def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
     # Ensure the index is datetime for resampling
     df = df.copy()
     df.set_index('received_at', inplace=True)
     
-    # Define resolution based on selection
+    # Raw data processing for "Last Hour"
     if window_label == "Last Hour":
-        return df.reset_index() # Raw data (no change)
-    elif window_label in ["Last 24 Hours", "Since Midnight"]:
+        # Calculate cumulative values on raw data before returning
+        if cumulative_cols:
+            for col in cumulative_cols:
+                if col in df.columns:
+                    target_colname = f"{col}_cumulated"
+                    df[target_colname] = df[col].fillna(0).cumsum()
+        return df.reset_index()
+
+    # Define resolution based on selection
+    if window_label in ["Last 24 Hours", "Since Midnight"]:
         resample_rate = '5min'
     elif window_label in ["This Week", "Last 7 Days"]:
         resample_rate = '1H'
@@ -142,7 +150,23 @@ def resample_data(df, window_label):
         resample_rate = '1H'
     
     # Resample numeric columns only, then reset index to keep 'received_at'
+    # Default to mean for most variables (temp, humidity, etc.)
     resampled_df = df.select_dtypes(include=['number']).resample(resample_rate).mean()
+    
+    # Override specific columns with sum if they exist
+    if sum_cols:
+        for col in sum_cols:
+            if col in df.columns:
+                resampled_df[col] = df[col].resample(resample_rate).sum()
+
+    # Calculate cumulative values for specific columns
+    if cumulative_cols:
+        for col in cumulative_cols:
+            if col in resampled_df.columns:
+                target_colname = f"{col}_cumulated"
+                # We fill NaN with 0 before cumsum to handle missing intervals gracefully
+                resampled_df[target_colname] = resampled_df[col].fillna(0).cumsum()
+
     return resampled_df.reset_index()
 
 
@@ -487,14 +511,13 @@ class TimeSeriesDashboardItem:
         return self # Allow chaining
 
     def _prepare_data(self, df, x_col):
-        # Collect all columns and their intended labels
+        # 1. Collect all columns and their intended labels
         cols = [self.y_col_main] + [s['col'] for s in self.extra_y_series]
         labels = [self.y_col_main_label] + [s['label'] for s in self.extra_y_series]
         colors = [self.main_color] + [s['color'] for s in self.extra_y_series if s['color']]
         
-        # Melt dataframe for Altair
-        df_plot = df.copy()
-        # Rename columns to labels before melting for easier Altair logic
+        # 2. Rename and Melt for Altair
+        df_plot = df[ [x_col] + cols ].copy()
         rename_dict = {self.y_col_main: self.y_col_main_label}
         for s in self.extra_y_series:
             rename_dict[s['col']] = s['label']
@@ -504,7 +527,7 @@ class TimeSeriesDashboardItem:
                              var_name='Variable', value_name='Value')
         return melted, labels, colors
 
-    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None):
+    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None):
         if df.empty:
             st.warning(f"No data for {self.metric_title}")
             return
@@ -520,10 +543,13 @@ class TimeSeriesDashboardItem:
             
             # 1. Base Encoding
             # Calculate Y-axis domain
-            y_min = float(melted_df['Value'].min())
-            y_max = float(melted_df['Value'].max())
-            padding = (y_max - y_min) * 0.1 if y_max != y_min else 1
-            y_domain = [y_min - padding, y_max + padding]
+            if y_limits:
+                y_domain = y_limits
+            else:
+                y_min = float(melted_df['Value'].min())
+                y_max = float(melted_df['Value'].max())
+                padding = (y_max - y_min) * 0.1 if y_max != y_min else 1
+                y_domain = [y_min - padding, y_max + padding]
 
             color_scale = alt.Undefined
             if any(colors):
