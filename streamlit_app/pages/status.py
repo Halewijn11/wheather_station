@@ -137,7 +137,7 @@ utils.TimeSeriesDashboardItem(
     unit="RPM", 
     y_col_main="rpm", 
     main_color="#1E90FF"
-).plot(time_window_df)
+).plot(time_window_df, format=".0f")
 
 
 # #--------------------- snr -----------------------------

@@ -152,15 +152,18 @@ utils.TimeSeriesDashboardItem(
     y_col_main="sht_humidity_avg", 
     y_col_main_label="average",
     main_color="#1E90FF" # Blue
-).plot(time_window_df)
+).plot(time_window_df, format=".0f")
 
  # #--------------------- pressure -----------------------------
+if not time_window_df.empty:
+    time_window_df["bmp_pressure_avg"] = time_window_df["bmp_pressure_avg"] / 100
+
 utils.TimeSeriesDashboardItem(
     metric_title="Pressure", 
     unit="hPa", 
     y_col_main="bmp_pressure_avg", 
     main_color="#1E90FF" # Blue
-).plot(time_window_df)
+).plot(time_window_df, format=".0f")
 
  # #--------------------- light intensity -----------------------------
 utils.TimeSeriesDashboardItem(
@@ -176,7 +179,7 @@ utils.TimeSeriesDashboardItem(
     unit="", 
     y_col_main="wind_pulses_total", 
     main_color="#1E90FF" # Grey
-).plot(time_window_df)
+).plot(time_window_df, format=".0f")
 
  # #--------------------- wind direction -----------------------------
 utils.TimeSeriesDashboardItem(
@@ -184,7 +187,7 @@ utils.TimeSeriesDashboardItem(
     unit="°", 
     y_col_main="wind_direction", 
     main_color="#1E90FF" # Purple
-).plot(time_window_df, y_limits=[0, 360])
+).plot(time_window_df, y_limits=[0, 360], format=".0f")
 
  # #--------------------- rain pulses -----------------------------
 utils.TimeSeriesDashboardItem(
@@ -197,7 +200,7 @@ utils.TimeSeriesDashboardItem(
     col_name="rain_pulses_cumulated",
     label="cummulated rain pulses",
     color="#00CED1"
-).plot(time_window_df)
+).plot(time_window_df,format=".0f")
 
 #  #--------------------- wind direction as a function of tiem -----------------------------
 # radial_coords_df = utils.transform_to_radial_cartesian(time_window_df,'received_at', 'wind_direction')

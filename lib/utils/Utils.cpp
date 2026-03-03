@@ -24,24 +24,24 @@ void setExternalFanSpeed(Adafruit_PWMServoDriver& pwmBoard, int pwm_channel, int
     pwmBoard.setPWM(safe_channel, 0, dutyCycle);
 }
 
-int readFanSpeed() {
-    noInterrupts();
-    fan_pulse_count = 0;
-    interrupts();
-    unsigned long start_time = millis();
+// int readFanSpeed() {
+//     noInterrupts();
+//     fan_pulse_count = 0;
+//     interrupts();
+//     unsigned long start_time = millis();
     
-    // Wait for 1 second to accumulate pulses
-    while (millis() - start_time < 1000) {
-        yield(); 
-    }
+//     // Wait for 1 second to accumulate pulses
+//     while (millis() - start_time < 1000) {
+//         yield(); 
+//     }
 
-    noInterrupts();
-    unsigned int pulses = fan_pulse_count;
-    interrupts();
+//     noInterrupts();
+//     unsigned int pulses = fan_pulse_count;
+//     interrupts();
 
-    float revolutions = (float)pulses / pulses_per_rev;
-    return (int)(revolutions * 60.0);
-}
+//     float revolutions = (float)pulses / pulses_per_rev;
+//     return (int)(revolutions * 60.0);
+// }
 
 void fan_Counter() {
   fan_pulse_count++;                // Interrupt: happens on each tach pulse
