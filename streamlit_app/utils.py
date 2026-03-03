@@ -532,7 +532,7 @@ class TimeSeriesDashboardItem:
                              var_name='Variable', value_name='Value')
         return melted, labels, colors
 
-    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None):
+    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False):
         if df.empty:
             st.warning(f"No data for {self.metric_title}")
             return
@@ -541,7 +541,7 @@ class TimeSeriesDashboardItem:
         
         latest_val = df[self.y_col_main].iloc[-1]
         with col1:
-            st.metric(self.metric_title, f"{latest_val:.1f} {self.unit}")
+            st.metric(self.metric_title, f"{latest_val:{format}} {self.unit}")
 
         with col2:
             melted_df, labels, colors = self._prepare_data(df, x_col)
@@ -577,9 +577,9 @@ class TimeSeriesDashboardItem:
 
             # 2. Mark Type
             if chart_type == 'area':
-                main_mark = base.mark_area(opacity=0.4)
+                main_mark = base.mark_area(opacity=0.4, point=show_dots)
             else:
-                main_mark = base.mark_line(strokeWidth=2)
+                main_mark = base.mark_line(strokeWidth=2, point=show_dots)
 
             # 3. Interactivity (The Snapping Hover)
             nearest = alt.selection_point(on='mouseover', nearest=True, fields=[x_col], 
