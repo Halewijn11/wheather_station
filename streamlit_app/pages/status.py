@@ -37,35 +37,35 @@ discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 
 df = utils.get_data(discharge_curve)
+df.to_csv('full_data.csv', index=False)
+# df.to_excel('full_data.xlsx', index=False)   
 # df  = pd.read_csv('data.csv')
 
 # --- NEW: Time Window Selection ---
-time_options = {
-    "Last Hour": 1,
-    "Last 24 Hours": 24,
-    "Last Week": 168
-}
+time_options = [
+    "Last Hour",
+    "Last 24 Hours",
+    "Last 7 Days",
+    "Since Midnight",
+    "This Week",
+    "This Month"
+]
 
 selected_label = st.selectbox(
     "Select Time Range:",
-    options=list(time_options.keys()),
-    index=0 
+    options=time_options,
+    index=time_options.index("Since Midnight")  # Default to "Since Midnight"
 )
 
-time_window_hours = time_options[selected_label]
-
 # Now filter your data using this dynamic variable
-time_window_df = utils.filter_by_recency(df, hours=time_window_hours)
-
-
-# #--------------------- sample the dataframe to a lower resolution -----------------------------
-
-
-# 2. Filter by the number of hours defined in our config
-filtered_df = utils.filter_by_recency(df, hours = time_window_hours, mode = time_window_filtering_mode)
+# The function filter_by_recency now supports window_label directly
+# 2. Filter by the window label defined in our selection
+filtered_df = utils.filter_by_recency(df, window_label=selected_label, mode=time_window_filtering_mode)
 
 # 3. Apply the resolution defined in our config
 time_window_df = utils.resample_data(filtered_df, selected_label)
+time_window_df.to_csv('time_window_data.csv', index=False)
+# time_window_df.to_excel('time_window_data.xlsx', index=False)   
 
 # #--------------------- calculate some metrics -----------------------------
 last_measurement_string =  utils.get_last_measurement_string(df)
@@ -108,75 +108,61 @@ with col2:
     )
 
 # # #--------------------- power -----------------------------
-# utils.plot_metric_with_graph(
-#     time_window_df = time_window_df,
-#     y_variable_colname = 'power_avg',
-#     y_variable_unit = 'mW',
-#     y_variable_prefix_text = 'avg power',
-#     y_label = "power (mW)",
-#     x_label = 'received at'
-# )
+# utils.TimeSeriesDashboardItem(
+#     metric_title="Power", 
+#     unit="mW", 
+#     y_col_main="power_avg", 
+#     main_color="#1E90FF"
+# ).plot(time_window_df)
 
 # # #--------------------- battery_percentage -----------------------------
-# utils.plot_metric_with_graph(
-#     time_window_df = time_window_df,
-#     y_variable_colname = 'battery_percentage',
-#     y_variable_unit = '%',
-#     y_variable_prefix_text = 'battery percentage',
-#     y_label = "battery percentage (%)",
-#     x_label = 'received at'
-# )
+# utils.TimeSeriesDashboardItem(
+#     metric_title="Battery Percentage", 
+#     unit="%", 
+#     y_col_main="battery_percentage", 
+#     main_color="#1E90FF"
+# ).plot(time_window_df)
 
 # # #--------------------- battery_voltage -----------------------------
-# utils.plot_metric_with_graph(
-#     time_window_df = time_window_df,
-#     y_variable_colname = 'voltage_avg',
-#     y_variable_unit = 'V',
-#     y_variable_prefix_text = 'avg voltage',
-#     y_label = "voltage (V)",
-#     x_label = 'received at'
-# )
+# utils.TimeSeriesDashboardItem(
+#     metric_title="Battery Voltage", 
+#     unit="V", 
+#     y_col_main="voltage_avg", 
+#     main_color="#1E90FF"
+# ).plot(time_window_df)
 
 # # #--------------------- fan_rpm -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'rpm',
-    y_variable_unit = 'RPM',
-    y_variable_prefix_text = 'RPM',
-    y_label = "RPM",
-    x_label = 'received at'
-)
+utils.TimeSeriesDashboardItem(
+    metric_title="Fan RPM", 
+    unit="RPM", 
+    y_col_main="rpm", 
+    main_color="#1E90FF"
+).plot(time_window_df)
 
 
 # #--------------------- snr -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'snr',
-    y_variable_unit = 'snr',
-    y_variable_prefix_text = 'snr',
-    y_label = "snr",
-    x_label = 'received at'
-)
+utils.TimeSeriesDashboardItem(
+    metric_title="SNR", 
+    unit="", 
+    y_col_main="snr", 
+    main_color="#1E90FF"
+).plot(time_window_df)
 
 # #--------------------- rssi -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'rssi',
-    y_variable_unit = 'dBm',
-    y_variable_prefix_text = 'rssi',
-    y_label = "rssi (dBm)",
-    x_label = 'received at'
-)
+utils.TimeSeriesDashboardItem(
+    metric_title="RSSI", 
+    unit="dBm", 
+    y_col_main="rssi", 
+    main_color="#1E90FF"
+).plot(time_window_df)
 
 # #--------------------- transmission timegaps -----------------------------
-utils.plot_metric_with_graph(
-    time_window_df = time_window_df,
-    y_variable_colname = 'received_at_td_minutes',
-    y_variable_unit = 'minutes',
-    y_variable_prefix_text = 'tx timegap',
-    y_label = "tx timegap",
-    x_label = 'received at'
-)
+utils.TimeSeriesDashboardItem(
+    metric_title="Transmission Timegap", 
+    unit="min", 
+    y_col_main="received_at_td_minutes", 
+    main_color="#1E90FF"
+).plot(time_window_df)
 
 
 
