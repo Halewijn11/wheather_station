@@ -151,7 +151,12 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
     
     # Resample numeric columns only, then reset index to keep 'received_at'
     # Default to mean for most variables (temp, humidity, etc.)
+    # label='right' labels the bucket with the end of the interval, 
+    # which reduces the "offset" perceived in the graphs
     resampled_df = df.select_dtypes(include=['number']).resample(resample_rate).mean()
+    
+    # Drop empty buckets (NaN rows) to remove "holes" in the line charts
+    resampled_df = resampled_df.dropna(how='all')
     
     # Override specific columns with sum if they exist
     if sum_cols:
