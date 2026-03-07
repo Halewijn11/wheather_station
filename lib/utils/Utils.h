@@ -68,7 +68,7 @@ Ina3221Reading readIna3221Channel(Adafruit_INA3221& ina3221, uint8_t channel);
 
 // Helper to pack values into a buffer to avoid redundancy
 inline void packValue(uint8_t* buffer, uint16_t &index, float value, float multiplier, int byteSize) {
-    uint32_t packedVal = (uint32_t)(value * multiplier);
+    int32_t packedVal = (int32_t)(value * multiplier);
 
     if (byteSize == 4) {
         buffer[index++] = (uint8_t)(packedVal >> 24);
@@ -171,7 +171,9 @@ void pack(uint8_t* buffer, uint16_t &index, int sampleCount, float multiplier = 
 
 struct RainTracker {
     void reset() {
+        noInterrupts();
         rain_pulse_count = 0;
+        interrupts();
     }
 
     void print() {
@@ -181,9 +183,12 @@ struct RainTracker {
 
     // byteSize 2 is enough for rain (up to 65535 tips)
     void pack(uint8_t* buffer, uint16_t &index) {
+        noInterrupts();
+        unsigned int current_rain = rain_pulse_count;
+        interrupts();
         // We pack the volatile rain_pulse_count as a float 
         // to use your existing packValue helper
-        packValue(buffer, index, (float)rain_pulse_count, 1.0, 2);
+        packValue(buffer, index, (float)current_rain, 1.0, 2);
     }
 };
 
@@ -196,13 +201,17 @@ struct WindSpeedTracker {
         total = 0;
         min = 999999.0;
         max = -999999.0;
+        noInterrupts();
         wind_pulse_count = 0; // Reset the global interrupt counter
+        interrupts();
     }
 
     // This is called once per sample (e.g., every 1 second)
     void update() {
+        noInterrupts();
         float currentPulses = (float)wind_pulse_count;
         wind_pulse_count = 0; // Reset global counter for the next window
+        interrupts();
 
         total += currentPulses;
         if (currentPulses < min) min = currentPulses;

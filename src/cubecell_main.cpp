@@ -6,6 +6,7 @@
 #include "Utils.h"
 #include "SHT4x.h"
 #include <Adafruit_PWMServoDriver.h>
+#include "secrets.h"
 
 
 /****************************************************
@@ -30,14 +31,14 @@ appkey: 84FA823981303163AFE2968797AFDD49
  
 
 /* OTAA para*/
-uint8_t devEui[] = { 0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x07, 0x48, 0x25 };
-uint8_t appEui[] = { 0x70, 0xB3, 0xD5, 0x7E, 0xD0, 0x07, 0x48, 0x24 };
-uint8_t appKey[] = { 0x84, 0xFA, 0x82, 0x39, 0x81, 0x30, 0x31, 0x63, 0xAF, 0xE2, 0x96, 0x87, 0x97, 0xAF, 0xDD, 0x49 };
+uint8_t devEui[] = SECRET_DEV_EUI;
+uint8_t appEui[] = SECRET_APP_EUI;
+uint8_t appKey[] = SECRET_APP_KEY;
 
 /* ABP para*/
-uint8_t nwkSKey[] = { 0x15, 0xb1, 0xd0, 0xef, 0xa4, 0x63, 0xdf, 0xbe, 0x3d, 0x11, 0x18, 0x1e, 0x1e, 0xc7, 0xda,0x85 };
-uint8_t appSKey[] = { 0xd7, 0x2c, 0x78, 0x75, 0x8c, 0xdc, 0xca, 0xbf, 0x55, 0xee, 0x4a, 0x77, 0x8d, 0x16, 0xef,0x67 };
-uint32_t devAddr =  ( uint32_t )0x007e6ae1;
+uint8_t nwkSKey[] = SECRET_NWK_SKEY;
+uint8_t appSKey[] = SECRET_APP_SKEY;
+uint32_t devAddr = SECRET_DEV_ADDR;
 
 /*LoraWan channelsmask, default channels 0-7*/ 
 uint16_t userChannelsMask[6]={ 0x00FF,0x0000,0x0000,0x0000,0x0000,0x0000 };
@@ -102,6 +103,7 @@ const int fan_tach_pin = GPIO1;
 const int pwm_channel = 0;   
 int target_speed_pct = 50; 
 const int fan_speed_measurement_timems = 500;
+int current_fan_rpm = 0;
 
 /* Sensor Objects */
 Adafruit_BMP280 bmp;
@@ -162,9 +164,6 @@ void downLinkDataHandle(McpsIndication_t *mcpsIndication) {
 
 /* Prepares the payload of the frame */
 static void prepareTxFrame( uint8_t port ) {
-    // 1. MEASURE FAN RPM (Only happens once per uplink)
-    int current_fan_rpm = readFanSpeed_Updated(fan_tach_pin, fan_speed_measurement_timems);
-
     uint16_t cursor = 0;
 
     // Version byte
@@ -340,6 +339,9 @@ void loop() {
 
             // 2. Check if it is time to Uplink
             if (sampleCount >= numSamples) {
+                // 1. MEASURE FAN RPM (Just before prepareTxFrame)
+                current_fan_rpm = readFanSpeed_Updated(fan_tach_pin, fan_speed_measurement_timems);
+                
                 prepareTxFrame(appPort);
                 LoRaWAN.send();
                 //reset the values
