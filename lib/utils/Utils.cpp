@@ -6,7 +6,8 @@
 // extern const int pulses_per_rev
 
 volatile unsigned int fan_pulse_count = 0;
-volatile unsigned long last_micros = 0;
+volatile unsigned long last_micros_rain = 0;
+volatile unsigned long last_micros_wind = 0;
 
 const int pulses_per_rev = 2;
 const int pwm_bit_depth =65536;
@@ -96,11 +97,11 @@ Ina3221Reading readIna3221Channel(Adafruit_INA3221& ina3221,uint8_t channel) {
 volatile unsigned int rain_pulse_count = 0;
 void rain_Counter() {
   unsigned long current_micros = micros();
-    // Ignore pulses that happen within 200,000 microseconds (200ms) of each other
-  if (current_micros - last_micros > 800000) {
+    // Ignore pulses that happen within 800,000 microseconds (800ms) of each other
+  if (current_micros - last_micros_rain > 800000) {
     rain_pulse_count++;
     // Serial.println("pulse!");
-    last_micros = current_micros;
+    last_micros_rain = current_micros;
   }
   
   // Serial.println("total read rain pulses:");
@@ -114,9 +115,9 @@ volatile unsigned int wind_pulse_count = 0;
 void wind_Counter() {
   unsigned long current_micros = micros();
     // Ignore pulses that happen within 200,000 microseconds (200ms) of each other
-  if (current_micros - last_micros > 200000) {
+  if (current_micros - last_micros_wind > 200000) {
     wind_pulse_count++;
-    last_micros = current_micros;
+    last_micros_wind = current_micros;
   }
   // Serial.println("pulse!");
 }
