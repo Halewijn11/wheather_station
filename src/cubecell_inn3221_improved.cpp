@@ -12,6 +12,7 @@ void setup() {
   while (!Serial)
     delay(10); // Wait for serial port to connect on some boards
 
+  Wire.begin();
   Serial.println("Adafruit INA3221 simple test");
 
   /****************************************************
