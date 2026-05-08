@@ -1,81 +1,38 @@
 #include "Utils.h"
 #include "Adafruit_INA3221.h"
 
-// // Tell the library that these variables are defined in the main sketch
-// extern volatile unsigned int pulse_count;
-// extern const int pulses_per_rev
+// volatile unsigned int fan_pulse_count = 0;
+volatile unsigned long last_millis_rain = 0;
+volatile unsigned long last_millis_wind = 0;
 
-volatile unsigned int fan_pulse_count = 0;
-volatile unsigned long last_micros_rain = 0;
-volatile unsigned long last_micros_wind = 0;
+// const int pulses_per_rev = 2;
+// const int pwm_bit_depth = 65536;
 
-const int pulses_per_rev = 2;
-const int pwm_bit_depth =65536;
-
-void setExternalFanSpeed(Adafruit_PWMServoDriver& pwmBoard, int pwm_channel, int percent) {
-    // 1. Constrain for safety
-    int safe_percent = constrain(percent, 0, 100);
-    int safe_channel = constrain(pwm_channel, 0, 15);
-    
-    // 2. Map 0-100% to 12-bit (0-4095)
-    // Formula: (percent / 100) * 4095
-    int dutyCycle = (safe_percent * 4095) / 100;
-    
-    // 3. Send to the I2C board
-    pwmBoard.setPWM(safe_channel, 0, dutyCycle);
-}
-
-// int readFanSpeed() {
-//     noInterrupts();
-//     fan_pulse_count = 0;
-//     interrupts();
-//     unsigned long start_time = millis();
-    
-//     // Wait for 1 second to accumulate pulses
-//     while (millis() - start_time < 1000) {
-//         yield(); 
-//     }
-
-//     noInterrupts();
-//     unsigned int pulses = fan_pulse_count;
-//     interrupts();
-
-//     float revolutions = (float)pulses / pulses_per_rev;
-//     return (int)(revolutions * 60.0);
+// void setExternalFanSpeed(Adafruit_PWMServoDriver& pwmBoard, int pwm_channel, int percent) {
+//     int safe_percent = constrain(percent, 0, 100);
+//     int safe_channel = constrain(pwm_channel, 0, 15);
+//     int dutyCycle = (safe_percent * 4095) / 100;
+//     pwmBoard.setPWM(safe_channel, 0, dutyCycle);
 // }
 
-void fan_Counter() {
-  fan_pulse_count++;                // Interrupt: happens on each tach pulse
-}
+// void fan_Counter() {
+//   fan_pulse_count++;
+// }
 
-int readFanSpeed_Updated(int tach_pin, unsigned long duration_ms) {
-    // 1. Reset count and attach interrupt
-    fan_pulse_count = 0;
-    attachInterrupt(digitalPinToInterrupt(tach_pin), fan_Counter, FALLING);
-    
-    unsigned long start_time = millis();
-    
-    // 2. Wait for the CUSTOM duration (e.g., 500ms, 2000ms)
-    while (millis() - start_time < duration_ms) {
-        yield(); 
-    }
+// int readFanSpeed_Updated(int tach_pin, unsigned long duration_ms) {
+//     fan_pulse_count = 0;
+//     attachInterrupt(digitalPinToInterrupt(tach_pin), fan_Counter, FALLING);
+//     unsigned long start_time = millis();
+//     while (millis() - start_time < duration_ms) { yield(); }
+//     detachInterrupt(digitalPinToInterrupt(tach_pin));
+//     float revolutions = (float)fan_pulse_count / pulses_per_rev;
+//     float rpm = revolutions * (60000.0 / duration_ms);
+//     return (int)rpm;
+// }
 
-    // 3. Detach the interrupt
-    detachInterrupt(digitalPinToInterrupt(tach_pin));
-
-    // 4. Calculate RPM
-    // Formula: (Pulses / PulsesPerRev) * (60000 / MeasurementTime)
-    float revolutions = (float)fan_pulse_count / pulses_per_rev;
-    float rpm = revolutions * (60000.0 / duration_ms); 
-    
-    return (int)rpm;
-}
-
-int percentage_To_Pwm(int percentage) {
-    return (int)(percentage * pwm_bit_depth) / 100-1;
-
-}
-
+// int percentage_To_Pwm(int percentage) {
+//     return (int)(percentage * pwm_bit_depth) / 100 - 1;
+// }
 
 Ina3221Reading readIna3221Channel(Adafruit_INA3221& ina3221,uint8_t channel) {
   Ina3221Reading reading;
@@ -96,12 +53,12 @@ Ina3221Reading readIna3221Channel(Adafruit_INA3221& ina3221,uint8_t channel) {
 // ##################### everything for the rain sensor ###############################3
 volatile unsigned int rain_pulse_count = 0;
 void rain_Counter() {
-  unsigned long current_micros = micros();
-    // Ignore pulses that happen within 800,000 microseconds (800ms) of each other
-  if (current_micros - last_micros_rain > 800000) {
+  unsigned long current_millis = millis();
+    // Ignore pulses that happen within 100 milliseconds of each other
+  if (current_millis - last_millis_rain > 100) {
     rain_pulse_count++;
     // Serial.println("pulse!");
-    last_micros_rain = current_micros;
+    last_millis_rain = current_millis;
   }
   
   // Serial.println("total read rain pulses:");
@@ -113,11 +70,11 @@ void rain_Counter() {
 // ##################### everything for the wind sensor ###############################3
 volatile unsigned int wind_pulse_count = 0;
 void wind_Counter() {
-  unsigned long current_micros = micros();
-    // Ignore pulses that happen within 200,000 microseconds (200ms) of each other
-  if (current_micros - last_micros_wind > 200000) {
+  unsigned long current_millis = millis();
+    // Ignore pulses that happen within 100 milliseconds of each other
+  if (current_millis - last_millis_wind > 100) {
     wind_pulse_count++;
-    last_micros_wind = current_micros;
+    last_millis_wind = current_millis;
   }
   // Serial.println("pulse!");
 }

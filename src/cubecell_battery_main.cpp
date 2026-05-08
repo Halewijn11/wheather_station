@@ -93,8 +93,8 @@ uint8_t confirmedNbTrials = 4;
  ****************************************************/
 
 /* Weather Station Variables */
-uint32_t numSamples = 60; 
-uint32_t measurementInterval_s = 5;
+uint32_t numSamples = 2; 
+uint32_t measurementInterval_s = 2;
 int sampleCount = 0;
 
 // Fan Specifics (disabled - no PWM/tachometer)

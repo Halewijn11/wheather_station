@@ -3,10 +3,9 @@
 #include <Arduino.h>  // <--- Add this line
 #include <math.h>
 #include <Adafruit_ADS1X15.h> // Make sure this is at the top
-#include <Adafruit_PWMServoDriver.h>
+// #include <Adafruit_PWMServoDriver.h>
 
-
-extern volatile unsigned int fan_pulse_count;
+// extern volatile unsigned int fan_pulse_count;
 
 // ##################### everything for the rain sensor ###############################3
 extern volatile unsigned int rain_pulse_count;
@@ -22,11 +21,11 @@ float getWindDirection(float voltage, float maxVoltage);
 // ##################### everything for the light sensor ###############################3
 float getSolarRadiation(Adafruit_ADS1115& ads, uint8_t signalChannel, uint8_t refChannel);
 
-int readFanSpeed();
-void setExternalFanSpeed(Adafruit_PWMServoDriver& pwmBoard, int pwm_channel, int percent);
-void fan_Counter();
-int readFanSpeed_Updated(int tach_pin, unsigned long duration_ms);
-int percentage_To_Pwm(int percentage); 
+// int readFanSpeed();
+// void setExternalFanSpeed(Adafruit_PWMServoDriver& pwmBoard, int pwm_channel, int percent);
+// void fan_Counter();
+// int readFanSpeed_Updated(int tach_pin, unsigned long duration_ms);
+// int percentage_To_Pwm(int percentage);
 
 //for the ina3221 readings
 // 🔹 Forward declaration (NO include needed here)
