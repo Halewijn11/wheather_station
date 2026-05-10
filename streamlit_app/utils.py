@@ -107,7 +107,7 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries = 1):
     df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
     df['battery_percentage'] = df.apply(
     lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row['voltage_avg']) 
-    if pd.notnull(row['voltage_avg']) else np.nan, 
+    if pd.notnull(row['voltage_bat']) else np.nan, 
     axis=1
     )
 

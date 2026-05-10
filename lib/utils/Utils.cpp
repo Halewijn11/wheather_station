@@ -54,15 +54,15 @@ Ina3221Reading readIna3221Channel(Adafruit_INA3221& ina3221,uint8_t channel) {
 volatile unsigned int rain_pulse_count = 0;
 void rain_Counter() {
   unsigned long current_millis = millis();
-    // Ignore pulses that happen within 100 milliseconds of each other
-  if (current_millis - last_millis_rain > 100) {
+    // Ignore pulses that happen within 50 milliseconds of each other
+  if (current_millis - last_millis_rain > 50) {
     rain_pulse_count++;
-    // Serial.println("pulse!");
+    Serial.println("pulse!");
     last_millis_rain = current_millis;
   }
   
-  // Serial.println("total read rain pulses:");
-  // Serial.println(rain_pulse_count);
+  Serial.println("total read rain pulses:");
+  Serial.println(rain_pulse_count);
 }
 
 

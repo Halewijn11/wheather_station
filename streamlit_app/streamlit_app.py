@@ -1,8 +1,6 @@
 import streamlit as st
-import importlib
 import utils
 import pandas as pd
-importlib.reload(utils)
 
 # --- PAGE SETUP ---
 dashboard_page = st.Page(

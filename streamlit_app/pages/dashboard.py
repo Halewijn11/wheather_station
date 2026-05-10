@@ -1,8 +1,6 @@
 import streamlit as st
-import importlib
 import pandas as pd
 import utils
-importlib.reload(utils)
 from streamlit_extras.metric_cards import style_metric_cards
 import altair as alt
 import numpy as np
