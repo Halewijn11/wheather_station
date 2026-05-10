@@ -95,7 +95,7 @@ def filter_data(df, window_hours=1, mode='live'):
         limit = latest_recorded_second + (window_hours * 3600)
         return df[df['seconds_since_now'] <= limit].copy()
 
-def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, voltage_col='voltage_avg'):
+def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
     df = google_sheet_df.copy()
     #formatting
     df['received_at'] =pd.to_datetime(df['received_at'], utc=True).dt.floor('s').dt.floor('s')
@@ -114,7 +114,7 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, volt
     return df
 
 @st.cache_data(ttl = 3*60)
-def get_data(discharge_curve, num_batteries=1, voltage_col='voltage_avg'):
+def get_data(discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
     url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
     # Note: Ensure st.connection is available here
     conn = st.connection("gsheets", type=GSheetsConnection)
