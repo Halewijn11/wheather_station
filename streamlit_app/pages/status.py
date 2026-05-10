@@ -115,28 +115,29 @@ with col2:
 # ).plot(time_window_df)
 
 # # #--------------------- battery_percentage -----------------------------
-# utils.TimeSeriesDashboardItem(
-#     metric_title="Battery Percentage", 
-#     unit="%", 
-#     y_col_main="battery_percentage", 
-#     main_color="#1E90FF"
-# ).plot(time_window_df)
+utils.TimeSeriesDashboardItem(
+    metric_title="Battery Percentage", 
+    unit="%", 
+    y_col_main="battery_percentage", 
+    main_color="#1E90FF"
+).plot(time_window_df, format =".0f")
 
 # # #--------------------- battery_voltage -----------------------------
-# utils.TimeSeriesDashboardItem(
-#     metric_title="Battery Voltage", 
-#     unit="V", 
-#     y_col_main="voltage_avg", 
-#     main_color="#1E90FF"
-# ).plot(time_window_df)
+utils.TimeSeriesDashboardItem(
+    metric_title="Battery Voltage", 
+    unit="V", 
+    y_col_main="voltage_bat", 
+    main_color="#1E90FF"
+).plot(time_window_df, format=".2f")
+
 
 # # #--------------------- fan_rpm -----------------------------
-utils.TimeSeriesDashboardItem(
-    metric_title="Fan RPM", 
-    unit="RPM", 
-    y_col_main="rpm", 
-    main_color="#1E90FF"
-).plot(time_window_df, format=".0f")
+# utils.TimeSeriesDashboardItem(
+#     metric_title="Fan RPM", 
+#     unit="RPM", 
+#     y_col_main="rpm", 
+#     main_color="#1E90FF"
+# ).plot(time_window_df, format=".0f")
 
 
 # #--------------------- snr -----------------------------

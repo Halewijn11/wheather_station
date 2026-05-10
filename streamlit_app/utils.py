@@ -5,7 +5,7 @@ from astral import LocationInfo
 from astral.sun import sun
 from datetime import date, timedelta
 import numpy as np
-from streamlit_gsheets import GSheetsConnection
+# from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 import os
 import pytz
@@ -115,12 +115,8 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, volt
 
 @st.cache_data(ttl = 3*60)
 def get_data(discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
-    url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
-    # Note: Ensure st.connection is available here
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    google_sheet_df = conn.read(spreadsheet=url, ttl=0) 
-    
-    # Assuming tidy_google_sheet_df is also in this utils.py file
+    export_url = "https://docs.google.com/spreadsheets/d/1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q/export?format=csv&gid=0"
+    google_sheet_df = pd.read_csv(export_url)
     df = tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=num_batteries, voltage_col=voltage_col)
     return df
 

@@ -320,7 +320,7 @@ function decodeUplink(input) {
                     var v4_rainTotal = readUint(2);
 
                     // 09. Battery Voltage (mV)
-                    var v4_batteryMv = readUint(2);
+                    var v4_battery = readUint(2) / 1000.0; // Convert mV to V
 
                     // --- Construct the Final Object ---
                     data = {
@@ -357,7 +357,7 @@ function decodeUplink(input) {
                             max: v4_shtHumidMax
                         },
                         rain_pulses: v4_rainTotal,
-                        battery_mv: v4_batteryMv
+                        battery_v: v4_battery
                     };
                     break;
 
