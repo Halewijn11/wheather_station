@@ -110,6 +110,9 @@ time_options = [
     "This Week",
     "This Month"
 ]
+if st.button("Refresh Data"):
+    utils.get_data.clear()
+    st.success("Data refreshed!")
 
 # Create the dropdown (selectbox)
 selected_label = st.selectbox(
@@ -242,4 +245,3 @@ utils.TimeSeriesDashboardItem(
 #     ]
 #     ).properties(height=100)
 #     st.altair_chart(spark, use_container_width=True)
-    
