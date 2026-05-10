@@ -95,7 +95,7 @@ def filter_data(df, window_hours=1, mode='live'):
         limit = latest_recorded_second + (window_hours * 3600)
         return df[df['seconds_since_now'] <= limit].copy()
 
-def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries = 1):
+def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, voltage_col='voltage_avg'):
     df = google_sheet_df.copy()
     #formatting
     df['received_at'] =pd.to_datetime(df['received_at'], utc=True).dt.floor('s').dt.floor('s')
@@ -106,8 +106,8 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries = 1):
     now = pd.Timestamp.now(tz='UTC')
     df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
     df['battery_percentage'] = df.apply(
-    lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row['voltage_avg']) 
-    if pd.notnull(row['voltage_bat']) else np.nan, 
+    lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row[voltage_col]) 
+    if pd.notnull(row[voltage_col]) else np.nan, 
     axis=1
     )
 
