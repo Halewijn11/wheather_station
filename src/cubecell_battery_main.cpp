@@ -138,7 +138,8 @@ uint32_t adcWinddirectionChannel = 1;
 uint32_t adcLightIntensityChannel = 0;
 
 // Increment this whenever you change the payload structure
-uint8_t payloadVersion = 3; 
+uint8_t payloadVersion = 4;
+uint16_t battery_voltage_mv = 0;
 
 /* Prepares the payload of the frame */
 static void prepareTxFrame( uint8_t port ) {
@@ -158,7 +159,10 @@ static void prepareTxFrame( uint8_t port ) {
     // voltageStats.pack(appData, cursor, sampleCount, 100, 2); 
     // currentStats.pack(appData, cursor, sampleCount, 100, 2);
     // powerStats.pack(appData, cursor, sampleCount, 100, 2);
-    // Fan RPM removed in V3
+
+    // 09. Battery Voltage (2 bytes, in mV, no scaling)
+    appData[cursor++] = (uint8_t)(battery_voltage_mv >> 8);
+    appData[cursor++] = (uint8_t)(battery_voltage_mv & 0xFF);
 
     // print all the stats
     windDirectionTracker.print(sampleCount);
@@ -169,7 +173,8 @@ static void prepareTxFrame( uint8_t port ) {
     shtTempstats.print("sht temp",sampleCount);
     shtHumidityStats.print("sht humidity",sampleCount);
     rainTracker.print();
-    // voltageStats.print("Voltage (V)", sampleCount);
+    Serial.print("Battery Voltage (mV): ");
+    Serial.println(battery_voltage_mv);
     // currentStats.print("Current (mA)", sampleCount);
     // powerStats.print("Power (mW)", sampleCount);
 
@@ -191,14 +196,16 @@ void setup() {
 
 
     // CubeCell Power Management: Turn on Vext to power sensors
-    pinMode(Vext, OUTPUT);
-    digitalWrite(Vext, LOW); 
+    // pinMode(Vext, OUTPUT);
+    // digitalWrite(Vext, LOW);
+    // ADC_CTL not used — battery voltage read via ADS1115 channel A3
     Wire.begin();
     delay(100);
     if (!ads.begin()) {
         Serial.println("ADS1115 Fail!");
         while (1);
     }
+    ads.setGain(GAIN_TWOTHIRDS); // Sets range to +/- 4.096V
 
     if (!bmp.begin(0x76)) {
         Serial.println("BMP280 Fail!");
@@ -309,7 +316,10 @@ void loop() {
 
             // 2. Check if it is time to Uplink
             if (sampleCount >= numSamples) {
-                // Fan RPM measurement removed in V3
+                // Read battery voltage once before sending
+                // Read battery voltage from ADS1115 channel A3 (0.1875 mV/bit at default gain)
+                // battery_voltage_mv = (uint16_t)(ads.readADC_SingleEnded(3) * 0.1875f);
+                battery_voltage_mv = getBatteryVoltage();
                 prepareTxFrame(appPort);
                 LoRaWAN.send();
                 //reset the values

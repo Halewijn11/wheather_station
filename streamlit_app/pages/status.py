@@ -1,5 +1,4 @@
 import streamlit as st
-import importlib
 import utils
 import pandas as pd
 import altair as alt
@@ -7,7 +6,7 @@ from streamlit_extras.metric_cards import style_metric_cards
 import os
 from streamlit_gsheets import GSheetsConnection
 
-importlib.reload(utils)
+
 
 st.title("Status")
 
