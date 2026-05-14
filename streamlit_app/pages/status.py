@@ -5,6 +5,7 @@ import altair as alt
 from streamlit_extras.metric_cards import style_metric_cards
 import os
 from streamlit_gsheets import GSheetsConnection
+from datetime import datetime
 
 
 
@@ -36,25 +37,23 @@ discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 
 df = utils.get_data(discharge_curve)
+last_datapoint = df['received_at'].max()
+if pd.notna(last_datapoint):
+    last_datapoint_ts = pd.Timestamp(last_datapoint)
+    if last_datapoint_ts.tzinfo is None:
+        last_datapoint_ts = last_datapoint_ts.tz_localize('UTC')
+    last_datapoint_local = last_datapoint_ts.tz_convert('Europe/Brussels')
+    last_datapoint_str = f"{last_datapoint_local.strftime('%a')} {last_datapoint_local.day} {last_datapoint_local.strftime('%b')} {last_datapoint_local.strftime('%H:%M')}"
+    st.caption(f"Last datapoint on: {last_datapoint_str}")
+else:
+    st.caption("Last datapoint on: N/A")
+
 df.to_csv('full_data.csv', index=False)
 # df.to_excel('full_data.xlsx', index=False)   
 # df  = pd.read_csv('data.csv')
 
 # --- NEW: Time Window Selection ---
-time_options = [
-    "Last Hour",
-    "Last 24 Hours",
-    "Last 7 Days",
-    "Since Midnight",
-    "This Week",
-    "This Month"
-]
-
-selected_label = st.selectbox(
-    "Select Time Range:",
-    options=time_options,
-    index=time_options.index("Since Midnight")  # Default to "Since Midnight"
-)
+selected_label = utils.get_shared_time_range_selection("Select Time Range:")
 
 # Now filter your data using this dynamic variable
 # The function filter_by_recency now supports window_label directly
@@ -98,7 +97,7 @@ else:
 with col2:
     # Adjust the 'px' value (e.g., 25px) to move the text lower or higher
     st.markdown(
-        f"""f
+        f"""
         <div style="margin-top: 4px; font-size: 20px; font-weight: bold;">
             {battery_percentage_str}
         </div>
@@ -114,21 +113,14 @@ with col2:
 #     main_color="#1E90FF"
 # ).plot(time_window_df)
 
-# # #--------------------- battery_percentage -----------------------------
-utils.TimeSeriesDashboardItem(
-    metric_title="Battery Percentage", 
-    unit="%", 
-    y_col_main="battery_percentage", 
-    main_color="#1E90FF"
-).plot(time_window_df, format =".0f")
 
 # # #--------------------- battery_voltage -----------------------------
-utils.TimeSeriesDashboardItem(
-    metric_title="Battery Voltage", 
-    unit="V", 
-    y_col_main="voltage_bat", 
-    main_color="#1E90FF"
-).plot(time_window_df, format=".2f")
+# utils.TimeSeriesDashboardItem(
+#     metric_title="Battery Voltage", 
+#     unit="V", 
+#     y_col_main="voltage_bat", 
+#     main_color="#1E90FF"
+# ).plot(time_window_df, format=".2f")
 
 
 # # #--------------------- fan_rpm -----------------------------
@@ -164,6 +156,13 @@ utils.TimeSeriesDashboardItem(
     main_color="#1E90FF"
 ).plot(time_window_df)
 
+# # #--------------------- battery_percentage -----------------------------
+utils.TimeSeriesDashboardItem(
+    metric_title="Battery Percentage", 
+    unit="%", 
+    y_col_main="battery_percentage", 
+    main_color="#1E90FF"
+).plot(time_window_df, format =".0f")
 
 
 # # for the dbm

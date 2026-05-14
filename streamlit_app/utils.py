@@ -11,6 +11,33 @@ import os
 import pytz
 from pandas.tseries.frequencies import to_offset
 
+TIME_OPTIONS = [
+    "Last Hour",
+    "Last 24 Hours",
+    "Last 7 Days",
+    "Since Midnight",
+    "This Week",
+    "This Month",
+]
+DEFAULT_TIME_RANGE = "Since Midnight"
+TIME_RANGE_STATE_KEY = "selected_time_range"
+
+
+def get_shared_time_range_selection(label="Select Time Range:"):
+    # Persist one stable value in session state and rehydrate the widget from it.
+    # This avoids page-switch widget cleanup resetting the selected option.
+    if TIME_RANGE_STATE_KEY not in st.session_state or st.session_state[TIME_RANGE_STATE_KEY] not in TIME_OPTIONS:
+        st.session_state[TIME_RANGE_STATE_KEY] = DEFAULT_TIME_RANGE
+
+    selected = st.selectbox(
+        label,
+        options=TIME_OPTIONS,
+        index=TIME_OPTIONS.index(st.session_state[TIME_RANGE_STATE_KEY]),
+    )
+
+    st.session_state[TIME_RANGE_STATE_KEY] = selected
+    return selected
+
 def get_google_sheet_df(sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
     # Construct the base export URL
     url = f"{base_url}{sheet_id}/export?format=csv"
@@ -264,8 +291,8 @@ def get_sunrise_sunset(latitude=50.924503, longitude=4.112950):
 
     s = sun(city.observer, date=date.today(), tzinfo=city.timezone)
 
-    sunrise_str = s["sunrise"].strftime("%H:%M") + " AM"
-    sunset_str = s["sunset"].strftime("%H:%M") + " PM"
+    sunrise_str = s["sunrise"].strftime("%H:%M")
+    sunset_str = s["sunset"].strftime("%H:%M")
 
     return sunrise_str, sunset_str
 
@@ -402,7 +429,7 @@ def plot_data_altair(df, y_variable_colname, x_variable_colname='received_at',
         f"{x_variable_colname}:T", # :T tells Altair it's a temporal (time) column
         title=x_label if x_label else x_variable_colname,
         scale=alt.Scale(domain=x_limits) if x_limits else alt.Undefined,
-        axis=alt.Axis(ticks=show_ticks, labels=show_ticks)
+        axis=alt.Axis(ticks=show_ticks, labels=show_ticks, format='%H:%M')
     )
 
     y_axis = alt.Y(
@@ -446,7 +473,7 @@ def plot_data_altair_hover(df, y_variable_colname, x_variable_colname='received_
         x=alt.X(f"{x_variable_colname}:T", 
                 title=x_label or x_variable_colname,
                 scale=alt.Scale(domain=x_domain),
-                axis=alt.Axis(ticks=show_ticks, labels=show_ticks)),
+            axis=alt.Axis(ticks=show_ticks, labels=show_ticks, format='%H:%M')),
         y=alt.Y(f"{y_variable_colname}:Q", 
                 title=y_label or y_variable_colname,
                 scale=alt.Scale(domain=y_domain, clamp=True),
@@ -562,7 +589,7 @@ class TimeSeriesDashboardItem:
                 color_scale = alt.Scale(domain=labels, range=colors)
 
             base = alt.Chart(melted_df).encode(
-                x=alt.X(f"{x_col}:T", title=None),
+                x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(format='%H:%M')),
                 y=alt.Y("Value:Q", title=y_label or self.unit, 
                         scale=alt.Scale(domain=y_domain, clamp=True)),
                 color=alt.Color("Variable:N", 
@@ -586,7 +613,7 @@ class TimeSeriesDashboardItem:
                                           encodings=['x'], empty=False)
 
             # Build the multiline tooltip list (Show ALL variables in one box)
-            tooltip_list = [alt.Tooltip(f"{x_col}:T", title="Time", format='%H:%M')]
+            tooltip_list = [alt.Tooltip(f"{x_col}:T", title="Time", format='%d %b %H:%M')]
             # Add main series
             tooltip_list.append(alt.Tooltip(f"{self.y_col_main}:Q", title=self.y_col_main_label, format='.2f'))
             # Add extra series values
