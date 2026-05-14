@@ -9,6 +9,7 @@ import numpy as np
 from datetime import datetime
 import os
 import pytz
+from pandas.tseries.frequencies import to_offset
 
 def get_google_sheet_df(sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
     # Construct the base export URL
@@ -139,11 +140,14 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
     if window_label in ["Last 24 Hours", "Since Midnight"]:
         resample_rate = '5min'
     elif window_label in ["This Week", "Last 7 Days"]:
-        resample_rate = '1H'
+        resample_rate = '1h'
     elif window_label == "This Month":
-        resample_rate = '3H' # Larger window, larger step
+        resample_rate = '3h' # Larger window, larger step
     else:
-        resample_rate = '1H'
+        resample_rate = '1h'
+
+    # Validate frequency to catch invalid aliases early.
+    to_offset(resample_rate)
     
     # Resample numeric columns only, then reset index to keep 'received_at'
     # Default to mean for most variables (temp, humidity, etc.)
