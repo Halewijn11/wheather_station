@@ -1,5 +1,7 @@
 import streamlit as st
+import importlib
 import utils
+importlib.reload(utils)
 import pandas as pd
 
 # --- PAGE SETUP ---
