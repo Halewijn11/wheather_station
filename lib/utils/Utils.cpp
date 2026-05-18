@@ -57,12 +57,12 @@ void rain_Counter() {
     // Ignore pulses that happen within 50 milliseconds of each other
   if (current_millis - last_millis_rain > 50) {
     rain_pulse_count++;
-    Serial.println("pulse!");
+    // Serial.println("pulse!");
     last_millis_rain = current_millis;
   }
   
-  Serial.println("total read rain pulses:");
-  Serial.println(rain_pulse_count);
+  // Serial.println("total read rain pulses:");
+  // Serial.println(rain_pulse_count);
 }
 
 
