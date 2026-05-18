@@ -97,7 +97,7 @@ uint32_t numSamples = 60;
 uint32_t measurementInterval_s = 5;
 // for testing
 // uint32_t numSamples = 2; 
-// uint32_t measurementInterval_s = 2;
+// uint32_t measurementInterval_s = 10;
 int sampleCount = 0;
 
 // Fan Specifics (disabled - no PWM/tachometer)
@@ -247,6 +247,9 @@ void setup() {
     pinMode(windPin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(windPin), wind_Counter, FALLING);
 
+    // Initialize tracker bounds/counters before first sampling window.
+    windSpeedTracker.reset();
+
     // power sensor init
     // ina3221.setAveragingMode(INA3221_AVG_16_SAMPLES);
 
@@ -332,6 +335,7 @@ void loop() {
                 bmp280Tempstats.reset();     // Ensure these functions set Sum to 0
                 bmp280Pressurestats.reset(); // and reset Min/Max to defaults
                 windDirectionTracker.reset();
+                windSpeedTracker.reset();
                 lightIntensityStats.reset();
                 shtTempstats.reset();
                 shtHumidityStats.reset();

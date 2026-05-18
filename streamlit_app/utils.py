@@ -160,7 +160,7 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
             for col in cumulative_cols:
                 if col in df.columns:
                     target_colname = f"{col}_cumulated"
-                    df[target_colname] = df[col].fillna(0).cumsum()
+                    df[target_colname] = df[col].fillna(0).groupby(df.index.date).cumsum()
         return df.reset_index()
 
     # Define resolution based on selection
@@ -196,8 +196,8 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
         for col in cumulative_cols:
             if col in resampled_df.columns:
                 target_colname = f"{col}_cumulated"
-                # We fill NaN with 0 before cumsum to handle missing intervals gracefully
-                resampled_df[target_colname] = resampled_df[col].fillna(0).cumsum()
+                # Group by date so the cumsum resets to 0 at midnight each day
+                resampled_df[target_colname] = resampled_df[col].fillna(0).groupby(resampled_df.index.date).cumsum()
 
     return resampled_df.reset_index()
 
