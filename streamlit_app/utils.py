@@ -5,10 +5,38 @@ from astral import LocationInfo
 from astral.sun import sun
 from datetime import date, timedelta
 import numpy as np
-from streamlit_gsheets import GSheetsConnection
+# from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 import os
 import pytz
+from pandas.tseries.frequencies import to_offset
+
+TIME_OPTIONS = [
+    "Last Hour",
+    "Last 24 Hours",
+    "Last 7 Days",
+    "Since Midnight",
+    "This Week",
+    "This Month",
+]
+DEFAULT_TIME_RANGE = "Since Midnight"
+TIME_RANGE_STATE_KEY = "selected_time_range"
+
+
+def get_shared_time_range_selection(label="Select Time Range:"):
+    # Persist one stable value in session state and rehydrate the widget from it.
+    # This avoids page-switch widget cleanup resetting the selected option.
+    if TIME_RANGE_STATE_KEY not in st.session_state or st.session_state[TIME_RANGE_STATE_KEY] not in TIME_OPTIONS:
+        st.session_state[TIME_RANGE_STATE_KEY] = DEFAULT_TIME_RANGE
+
+    selected = st.selectbox(
+        label,
+        options=TIME_OPTIONS,
+        index=TIME_OPTIONS.index(st.session_state[TIME_RANGE_STATE_KEY]),
+    )
+
+    st.session_state[TIME_RANGE_STATE_KEY] = selected
+    return selected
 
 def get_google_sheet_df(sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
     # Construct the base export URL
@@ -95,7 +123,7 @@ def filter_data(df, window_hours=1, mode='live'):
         limit = latest_recorded_second + (window_hours * 3600)
         return df[df['seconds_since_now'] <= limit].copy()
 
-def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries = 1):
+def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
     df = google_sheet_df.copy()
     #formatting
     df['received_at'] =pd.to_datetime(df['received_at'], utc=True).dt.floor('s').dt.floor('s')
@@ -106,22 +134,18 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries = 1):
     now = pd.Timestamp.now(tz='UTC')
     df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
     df['battery_percentage'] = df.apply(
-    lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row['voltage_avg']) 
-    if pd.notnull(row['voltage_avg']) else np.nan, 
+    lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row[voltage_col]) 
+    if pd.notnull(row[voltage_col]) else np.nan, 
     axis=1
     )
 
     return df
 
 @st.cache_data(ttl = 3*60)
-def get_data(discharge_curve):
-    url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
-    # Note: Ensure st.connection is available here
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    google_sheet_df = conn.read(spreadsheet=url, ttl=0) 
-    
-    # Assuming tidy_google_sheet_df is also in this utils.py file
-    df = tidy_google_sheet_df(google_sheet_df, discharge_curve)
+def get_data(discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
+    export_url = "https://docs.google.com/spreadsheets/d/1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q/export?format=csv&gid=0"
+    google_sheet_df = pd.read_csv(export_url)
+    df = tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=num_batteries, voltage_col=voltage_col)
     return df
 
 def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
@@ -136,18 +160,21 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
             for col in cumulative_cols:
                 if col in df.columns:
                     target_colname = f"{col}_cumulated"
-                    df[target_colname] = df[col].fillna(0).cumsum()
+                    df[target_colname] = df[col].fillna(0).groupby(df.index.date).cumsum()
         return df.reset_index()
 
     # Define resolution based on selection
     if window_label in ["Last 24 Hours", "Since Midnight"]:
         resample_rate = '5min'
     elif window_label in ["This Week", "Last 7 Days"]:
-        resample_rate = '1H'
+        resample_rate = '1h'
     elif window_label == "This Month":
-        resample_rate = '3H' # Larger window, larger step
+        resample_rate = '3h' # Larger window, larger step
     else:
-        resample_rate = '1H'
+        resample_rate = '1h'
+
+    # Validate frequency to catch invalid aliases early.
+    to_offset(resample_rate)
     
     # Resample numeric columns only, then reset index to keep 'received_at'
     # Default to mean for most variables (temp, humidity, etc.)
@@ -169,8 +196,8 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
         for col in cumulative_cols:
             if col in resampled_df.columns:
                 target_colname = f"{col}_cumulated"
-                # We fill NaN with 0 before cumsum to handle missing intervals gracefully
-                resampled_df[target_colname] = resampled_df[col].fillna(0).cumsum()
+                # Group by date so the cumsum resets to 0 at midnight each day
+                resampled_df[target_colname] = resampled_df[col].fillna(0).groupby(resampled_df.index.date).cumsum()
 
     return resampled_df.reset_index()
 
@@ -264,8 +291,8 @@ def get_sunrise_sunset(latitude=50.924503, longitude=4.112950):
 
     s = sun(city.observer, date=date.today(), tzinfo=city.timezone)
 
-    sunrise_str = s["sunrise"].strftime("%H:%M") + " AM"
-    sunset_str = s["sunset"].strftime("%H:%M") + " PM"
+    sunrise_str = s["sunrise"].strftime("%H:%M")
+    sunset_str = s["sunset"].strftime("%H:%M")
 
     return sunrise_str, sunset_str
 
@@ -402,7 +429,7 @@ def plot_data_altair(df, y_variable_colname, x_variable_colname='received_at',
         f"{x_variable_colname}:T", # :T tells Altair it's a temporal (time) column
         title=x_label if x_label else x_variable_colname,
         scale=alt.Scale(domain=x_limits) if x_limits else alt.Undefined,
-        axis=alt.Axis(ticks=show_ticks, labels=show_ticks)
+        axis=alt.Axis(ticks=show_ticks, labels=show_ticks, format='%H:%M')
     )
 
     y_axis = alt.Y(
@@ -446,7 +473,7 @@ def plot_data_altair_hover(df, y_variable_colname, x_variable_colname='received_
         x=alt.X(f"{x_variable_colname}:T", 
                 title=x_label or x_variable_colname,
                 scale=alt.Scale(domain=x_domain),
-                axis=alt.Axis(ticks=show_ticks, labels=show_ticks)),
+            axis=alt.Axis(ticks=show_ticks, labels=show_ticks, format='%H:%M')),
         y=alt.Y(f"{y_variable_colname}:Q", 
                 title=y_label or y_variable_colname,
                 scale=alt.Scale(domain=y_domain, clamp=True),
@@ -562,7 +589,7 @@ class TimeSeriesDashboardItem:
                 color_scale = alt.Scale(domain=labels, range=colors)
 
             base = alt.Chart(melted_df).encode(
-                x=alt.X(f"{x_col}:T", title=None),
+                x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(format='%H:%M')),
                 y=alt.Y("Value:Q", title=y_label or self.unit, 
                         scale=alt.Scale(domain=y_domain, clamp=True)),
                 color=alt.Color("Variable:N", 
@@ -586,7 +613,7 @@ class TimeSeriesDashboardItem:
                                           encodings=['x'], empty=False)
 
             # Build the multiline tooltip list (Show ALL variables in one box)
-            tooltip_list = [alt.Tooltip(f"{x_col}:T", title="Time", format='%H:%M')]
+            tooltip_list = [alt.Tooltip(f"{x_col}:T", title="Time", format='%d %b %H:%M')]
             # Add main series
             tooltip_list.append(alt.Tooltip(f"{self.y_col_main}:Q", title=self.y_col_main_label, format='.2f'))
             # Add extra series values

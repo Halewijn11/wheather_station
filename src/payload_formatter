@@ -205,6 +205,162 @@ function decodeUplink(input) {
                     };
                     break;
 
+        case 3: // V3: Weather Station (No Fan PWM/RPM)
+
+                    // 01. Wind Direction
+                    var v3_windDirAvg = readUint(2);
+
+                    // 02. Wind Speed
+                    var v3_windSpeedTotal = readUint(2);
+                    var v3_windSpeedMin = readUint(2);
+                    var v3_windSpeedMax = readUint(2);
+
+                    // 03. BMP280 Temperature
+                    var v3_bmpTempAvg = readUint(2) / 100.0;
+                    var v3_bmpTempMin = readUint(2) / 100.0;
+                    var v3_bmpTempMax = readUint(2) / 100.0;
+
+                    // 04. BMP280 Pressure
+                    var v3_bmpPressAvg = readUint(4) / 100.0;
+                    var v3_bmpPressMin = readUint(4) / 100.0;
+                    var v3_bmpPressMax = readUint(4) / 100.0;
+
+                    // 05. Light Intensity
+                    var v3_lightAvg = readUint(2) / 100.0;
+                    var v3_lightMin = readUint(2) / 100.0;
+                    var v3_lightMax = readUint(2) / 100.0;
+
+                    // 06. SHT Temperature
+                    var v3_shtTempAvg = readUint(2) / 100.0;
+                    var v3_shtTempMin = readUint(2) / 100.0;
+                    var v3_shtTempMax = readUint(2) / 100.0;
+
+                    // 07. SHT Humidity
+                    var v3_shtHumidAvg = readUint(2) / 100.0;
+                    var v3_shtHumidMin = readUint(2) / 100.0;
+                    var v3_shtHumidMax = readUint(2) / 100.0;
+
+                    // 08. Rain
+                    var v3_rainTotal = readUint(2);
+
+                    // --- Construct the Final Object ---
+                    data = {
+                        version: payloadVersion,
+                        wind: {
+                            direction_deg: v3_windDirAvg,
+                            pulses_total: v3_windSpeedTotal,
+                            pulses_min: v3_windSpeedMin,
+                            pulses_max: v3_windSpeedMax
+                        },
+                        bmp_temperature: {
+                            avg: v3_bmpTempAvg,
+                            min: v3_bmpTempMin,
+                            max: v3_bmpTempMax
+                        },
+                        pressure_pa: {
+                            avg: v3_bmpPressAvg,
+                            min: v3_bmpPressMin,
+                            max: v3_bmpPressMax
+                        },
+                        light_solar: {
+                            avg: v3_lightAvg,
+                            min: v3_lightMin,
+                            max: v3_lightMax
+                        },
+                        sht_temperature: {
+                            avg: v3_shtTempAvg,
+                            min: v3_shtTempMin,
+                            max: v3_shtTempMax
+                        },
+                        sht_humidity: {
+                            avg: v3_shtHumidAvg,
+                            min: v3_shtHumidMin,
+                            max: v3_shtHumidMax
+                        },
+                        rain_pulses: v3_rainTotal
+                    };
+                    break;
+
+        case 4: // V4: Weather Station + Battery Voltage
+
+                    // 01. Wind Direction
+                    var v4_windDirAvg = readUint(2);
+
+                    // 02. Wind Speed
+                    var v4_windSpeedTotal = readUint(2);
+                    var v4_windSpeedMin = readUint(2);
+                    var v4_windSpeedMax = readUint(2);
+
+                    // 03. BMP280 Temperature
+                    var v4_bmpTempAvg = readUint(2) / 100.0;
+                    var v4_bmpTempMin = readUint(2) / 100.0;
+                    var v4_bmpTempMax = readUint(2) / 100.0;
+
+                    // 04. BMP280 Pressure
+                    var v4_bmpPressAvg = readUint(4) / 100.0;
+                    var v4_bmpPressMin = readUint(4) / 100.0;
+                    var v4_bmpPressMax = readUint(4) / 100.0;
+
+                    // 05. Light Intensity
+                    var v4_lightAvg = readUint(2) / 100.0;
+                    var v4_lightMin = readUint(2) / 100.0;
+                    var v4_lightMax = readUint(2) / 100.0;
+
+                    // 06. SHT Temperature
+                    var v4_shtTempAvg = readUint(2) / 100.0;
+                    var v4_shtTempMin = readUint(2) / 100.0;
+                    var v4_shtTempMax = readUint(2) / 100.0;
+
+                    // 07. SHT Humidity
+                    var v4_shtHumidAvg = readUint(2) / 100.0;
+                    var v4_shtHumidMin = readUint(2) / 100.0;
+                    var v4_shtHumidMax = readUint(2) / 100.0;
+
+                    // 08. Rain
+                    var v4_rainTotal = readUint(2);
+
+                    // 09. Battery Voltage (mV)
+                    var v4_battery = readUint(2) / 1000.0; // Convert mV to V
+
+                    // --- Construct the Final Object ---
+                    data = {
+                        version: payloadVersion,
+                        wind: {
+                            direction_deg: v4_windDirAvg,
+                            pulses_total: v4_windSpeedTotal,
+                            pulses_min: v4_windSpeedMin,
+                            pulses_max: v4_windSpeedMax
+                        },
+                        bmp_temperature: {
+                            avg: v4_bmpTempAvg,
+                            min: v4_bmpTempMin,
+                            max: v4_bmpTempMax
+                        },
+                        pressure_pa: {
+                            avg: v4_bmpPressAvg,
+                            min: v4_bmpPressMin,
+                            max: v4_bmpPressMax
+                        },
+                        light_solar: {
+                            avg: v4_lightAvg,
+                            min: v4_lightMin,
+                            max: v4_lightMax
+                        },
+                        sht_temperature: {
+                            avg: v4_shtTempAvg,
+                            min: v4_shtTempMin,
+                            max: v4_shtTempMax
+                        },
+                        sht_humidity: {
+                            avg: v4_shtHumidAvg,
+                            min: v4_shtHumidMin,
+                            max: v4_shtHumidMax
+                        },
+                        rain_pulses: v4_rainTotal,
+                        battery_v: v4_battery
+                    };
+                    break;
+
         default:
             data.error = "Unknown Payload Version: " + payloadVersion;
     }

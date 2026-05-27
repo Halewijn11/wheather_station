@@ -62,8 +62,9 @@ function doPost(e) {
       getVal(decoded, 'power', 'current_mA'),
       getVal(decoded, 'power', 'power_mW'),
       // Rain
-      // getVal(decoded, 'wind', 'pulses_total'),
-      decoded.rain_pulses !== undefined ? decoded.rain_pulses : ""
+      decoded.rain_pulses !== undefined ? decoded.rain_pulses : "",
+      // Battery Voltage (mV) - V4+
+      decoded.battery_mv !== undefined ? decoded.battery_mv : ""
     ];
 
     // 3. LOG TO SHEET

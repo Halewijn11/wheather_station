@@ -1,8 +1,6 @@
 import streamlit as st
-import importlib
 import pandas as pd
 import utils
-importlib.reload(utils)
 from streamlit_extras.metric_cards import style_metric_cards
 import altair as alt
 import numpy as np
@@ -20,6 +18,7 @@ time_window_filtering_mode = 'last_session'
 
 
 st.title("Wheather dashboard")
+
 
 # #--------------------- general preamble to load data -----------------------------
 # url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
@@ -39,6 +38,8 @@ asset_path = os.path.join(current_dir, "..", "assets")
 discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
+
+
 # #--------------------- current date -----------------------------
 # 1. Get the current date
 now = datetime.now()
@@ -104,21 +105,25 @@ with buffer:
 
 
 # #--------------------- button for time window -----------------------------
-time_options = [
-    "Last Hour",
-    "Last 24 Hours",
-    "Last 7 Days",
-    "Since Midnight",
-    "This Week",
-    "This Month"
-]
+
+last_datapoint = df['received_at'].max()
+if pd.notna(last_datapoint):
+    last_datapoint_ts = pd.Timestamp(last_datapoint)
+    if last_datapoint_ts.tzinfo is None:
+        last_datapoint_ts = last_datapoint_ts.tz_localize('UTC')
+    last_datapoint_local = last_datapoint_ts.tz_convert('Europe/Brussels')
+    last_datapoint_str = f"{last_datapoint_local.strftime('%a')} {last_datapoint_local.day} {last_datapoint_local.strftime('%b')} {last_datapoint_local.strftime('%H:%M')}"
+    st.caption(f"Last datapoint on: {last_datapoint_str}")
+else:
+    st.caption("Last datapoint on: N/A")
+    
+if st.button("Refresh Data"):
+    utils.get_data.clear()
+    st.success("Data refreshed!")
+
 
 # Create the dropdown (selectbox)
-selected_label = st.selectbox(
-    "Select Time Range:",
-    options=time_options,
-    index=time_options.index("Since Midnight")  # Default to "Since Midnight"
-)
+selected_label = utils.get_shared_time_range_selection("Select Time Range:")
 
 # Filter by the label defined in our config
 filtered_df = utils.filter_by_recency(df, window_label=selected_label, mode=time_window_filtering_mode)
@@ -138,11 +143,15 @@ utils.TimeSeriesDashboardItem(
     unit="°C", 
     y_col_main="sht_temperature_avg", 
     y_col_main_label="average",
-    main_color="#1E90FF" # Reddish
+    main_color="#2563EB" # Reddish
 ).add_extra_series(
     col_name="sht_temperature_max", 
     label="max", 
-    color="#1E90FF" # Salmon
+    color="#93C5FD" # Salmon
+).add_extra_series(
+    col_name="sht_temperature_min",
+    label="min",
+    color="#1D4ED8"
 ).plot(time_window_df)
 
 # #--------------------- humidity -----------------------------
@@ -151,18 +160,38 @@ utils.TimeSeriesDashboardItem(
     unit="%", 
     y_col_main="sht_humidity_avg", 
     y_col_main_label="average",
-    main_color="#1E90FF" # Blue
+    main_color="#2563EB" # Blue
+).add_extra_series(
+    col_name="sht_humidity_max",
+    label="max",
+    color="#93C5FD"
+).add_extra_series(
+    col_name="sht_humidity_min",
+    label="min",
+    color="#1D4ED8"
 ).plot(time_window_df, format=".0f")
 
  # #--------------------- pressure -----------------------------
 if not time_window_df.empty:
     time_window_df["bmp_pressure_avg"] = time_window_df["bmp_pressure_avg"] / 100
+    if "bmp_pressure_min" in time_window_df.columns:
+        time_window_df["bmp_pressure_min"] = time_window_df["bmp_pressure_min"] / 100
+    if "bmp_pressure_max" in time_window_df.columns:
+        time_window_df["bmp_pressure_max"] = time_window_df["bmp_pressure_max"] / 100
 
 utils.TimeSeriesDashboardItem(
     metric_title="Pressure", 
     unit="hPa", 
     y_col_main="bmp_pressure_avg", 
-    main_color="#1E90FF" # Blue
+    main_color="#2563EB" # Blue
+).add_extra_series(
+    col_name="bmp_pressure_max",
+    label="max",
+    color="#1D4ED8"
+).add_extra_series(
+    col_name="bmp_pressure_min",
+    label="min",
+    color="#93C5FD"
 ).plot(time_window_df, format=".0f")
 
  # #--------------------- light intensity -----------------------------
@@ -170,7 +199,15 @@ utils.TimeSeriesDashboardItem(
     metric_title="Light intensity", 
     unit="W/m²", 
     y_col_main="light_intensity_avg", 
-    main_color="#1E90FF" # Gold
+    main_color="#2563EB" # Gold
+).add_extra_series(
+    col_name="light_intensity_max",
+    label="max",
+    color="#93C5FD"
+).add_extra_series(
+    col_name="light_intensity_min",
+    label="min",
+    color="#1D4ED8"
 ).plot(time_window_df)
 
  # #--------------------- wind speed -----------------------------
@@ -195,7 +232,7 @@ utils.TimeSeriesDashboardItem(
     unit="", 
     y_col_main="rain_pulses", 
     y_col_main_label="rain pulses",
-    main_color="#1E90FF" # Turquoise
+    main_color="#93C5FD" # Turquoise
 ).add_extra_series(
     col_name="rain_pulses_cumulated",
     label="cummulated rain pulses",
@@ -244,4 +281,3 @@ utils.TimeSeriesDashboardItem(
 #     ]
 #     ).properties(height=100)
 #     st.altair_chart(spark, use_container_width=True)
-    

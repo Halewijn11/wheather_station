@@ -93,10 +93,11 @@ uint8_t confirmedNbTrials = 4;
  ****************************************************/
 
 /* Weather Station Variables */
-// uint32_t numSamples = 60; 
-// uint32_t measurementInterval_s = 5;
-uint32_t numSamples = 5; 
+uint32_t numSamples = 60; 
 uint32_t measurementInterval_s = 5;
+// for testing
+// uint32_t numSamples = 2; 
+// uint32_t measurementInterval_s = 10;
 int sampleCount = 0;
 
 // Fan Specifics (disabled - no PWM/tachometer)
@@ -113,12 +114,6 @@ Adafruit_ADS1115 ads;
 Adafruit_INA3221 ina3221;
 
 SHT4x sht;
-
-// Track which peripherals are actually available so missing I2C devices do not stall boot.
-bool pwmReady = false;
-bool adsReady = false;
-bool bmpReady = false;
-bool shtReady = false;
 
 /*everything for the sht temperature humidity sensor*/
 #define SHT_DEFAULT_ADDRESS   0x44
@@ -146,7 +141,8 @@ uint32_t adcWinddirectionChannel = 1;
 uint32_t adcLightIntensityChannel = 0;
 
 // Increment this whenever you change the payload structure
-uint8_t payloadVersion = 3; 
+uint8_t payloadVersion = 4;
+uint16_t battery_voltage_mv = 0;
 
 /* Prepares the payload of the frame */
 static void prepareTxFrame( uint8_t port ) {
@@ -166,7 +162,10 @@ static void prepareTxFrame( uint8_t port ) {
     // voltageStats.pack(appData, cursor, sampleCount, 100, 2); 
     // currentStats.pack(appData, cursor, sampleCount, 100, 2);
     // powerStats.pack(appData, cursor, sampleCount, 100, 2);
-    // Fan RPM removed in V3
+
+    // 09. Battery Voltage (2 bytes, in mV, no scaling)
+    appData[cursor++] = (uint8_t)(battery_voltage_mv >> 8);
+    appData[cursor++] = (uint8_t)(battery_voltage_mv & 0xFF);
 
     // print all the stats
     windDirectionTracker.print(sampleCount);
@@ -177,7 +176,8 @@ static void prepareTxFrame( uint8_t port ) {
     shtTempstats.print("sht temp",sampleCount);
     shtHumidityStats.print("sht humidity",sampleCount);
     rainTracker.print();
-    // voltageStats.print("Voltage (V)", sampleCount);
+    Serial.print("Battery Voltage (mV): ");
+    Serial.println(battery_voltage_mv);
     // currentStats.print("Current (mA)", sampleCount);
     // powerStats.print("Power (mW)", sampleCount);
 
@@ -195,53 +195,30 @@ static void prepareTxFrame( uint8_t port ) {
 
 void setup() {
     Serial.begin(115200);
-    delay(500);
-    Serial.println("Boot: setup() start");
-
-    // CubeCell Power Management: Turn on Vext to power sensors
-    pinMode(Vext, OUTPUT);
-    digitalWrite(Vext, LOW); 
-    Serial.println("Boot: Vext enabled");
-    Wire.begin();
-    delay(100);
-    Serial.println("Boot: I2C ready");
-
-    Serial.println("Boot: init PWM board");
-    pwmReady = pwmBoard.begin();
-    if (!pwmReady) {
-        Serial.println("PWM Board Fail! (continuing without fan PWM)");
-    } else {
-        pwmBoard.setPWMFreq(1600);
-        pinMode(fan_tach_pin, INPUT_PULLUP);
-        Serial.println("Boot: PWM board OK");
-    }
     
 
-    // Soft start fan: 0 to 80% in 3 seconds (steps of 10%)
-    if (pwmReady) {
-        Serial.println("Boot: fan soft-start");
-        for (int pct = 0; pct <= 80; pct += 10) {
-            setExternalFanSpeed(pwmBoard, pwm_channel, pct);
-            Serial.print("Soft Starting Fan: ");
-            Serial.print(pct);
-            Serial.println("%");
-            delay(375); // 3000ms / 8 steps = 375ms per step
-        }
-        target_speed_pct = 80;
+
+    // CubeCell Power Management: Turn on Vext to power sensors
+    // pinMode(Vext, OUTPUT);
+    // digitalWrite(Vext, LOW);
+    // ADC_CTL not used — battery voltage read via ADS1115 channel A3
+    Wire.begin();
+    delay(100);
+    if (!ads.begin()) {
+        Serial.println("ADS1115 Fail!");
+        while (1);
+    }
+    ads.setGain(GAIN_TWOTHIRDS); // Sets range to +/- 4.096V
+
+    if (!bmp.begin(0x76)) {
+        Serial.println("BMP280 Fail!");
+        while (1);
     }
 
-
-    Serial.println("Boot: init ADS1115");
-    adsReady = ads.begin();
-    Serial.println(adsReady ? "ADS1115 OK" : "ADS1115 Fail! (not connected)");
-
-    Serial.println("Boot: init BMP280");
-    bmpReady = bmp.begin(0x76);
-    Serial.println(bmpReady ? "BMP280 OK" : "BMP280 Fail! (not connected)");
-
-    Serial.println("Boot: init SHT");
-    shtReady = sht.begin();
-    Serial.println(shtReady ? "SHT OK" : "SHT Fail! (not connected)");
+    if (!sht.begin()) {
+        Serial.println("SHT Fail!");
+        while (1);
+    }
 
 
     // ina3221.begin(0x40, &Wire);
@@ -269,7 +246,6 @@ void setup() {
     // WIND SENSOR INIT
     pinMode(windPin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(windPin), wind_Counter, FALLING);
-    windSpeedTracker.reset();
 
     // Initialize tracker bounds/counters before first sampling window.
     windSpeedTracker.reset();
@@ -309,28 +285,22 @@ void loop() {
         }
         case DEVICE_STATE_SEND: {
             // 1. Collect Samples
-            float degrees = 0.0;
-            float solarRadiation = 0.0;
+            int16_t windRaw = ads.readADC_SingleEnded(1);
+            // Convert raw value to Volts: (Raw * 0.125mV) / 1000
+            float windVolts = (windRaw * 0.125) / 1000.0;
+            int16_t refRaw = ads.readADC_SingleEnded(2);
+            float refVolts = (refRaw * 0.125) / 1000.0;
+            
+            // Use your utility function for degrees
+            float degrees = getWindDirection(windVolts, refVolts);
 
-            if (adsReady) {
-                int16_t windRaw = ads.readADC_SingleEnded(1);
-                // Convert raw value to Volts: (Raw * 0.125mV) / 1000
-                float windVolts = (windRaw * 0.125) / 1000.0;
-                int16_t refRaw = ads.readADC_SingleEnded(2);
-                float refVolts = (refRaw * 0.125) / 1000.0;
-
-                // Use utility function for direction
-                degrees = getWindDirection(windVolts, refVolts);
-
-                // Light intensity
-                solarRadiation = getSolarRadiation(ads, adcLightIntensityChannel, 2);
-            }
-
-            if (shtReady) {
-                sht.read();
-                shtTempstats.update(sht.getTemperature());
-                shtHumidityStats.update(sht.getHumidity());
-            }
+            //light intensity
+            float solarRadiation = getSolarRadiation(ads, adcLightIntensityChannel, 2);
+            
+            //the sht sensor
+            sht.read(); 
+            shtTempstats.update(sht.getTemperature());
+            shtHumidityStats.update(sht.getHumidity());
 
             // //the power sensor
             // Ina3221Reading r = readIna3221Channel(ina3221, 0);
@@ -343,10 +313,8 @@ void loop() {
 
             windDirectionTracker.update(degrees);
             windSpeedTracker.update();
-            if (bmpReady) {
-                bmp280Tempstats.update(bmp.readTemperature());
-                bmp280Pressurestats.update(bmp.readPressure());
-            }
+            bmp280Tempstats.update(bmp.readTemperature());
+            bmp280Pressurestats.update(bmp.readPressure());
             lightIntensityStats.update(solarRadiation);
 
 
@@ -354,7 +322,10 @@ void loop() {
 
             // 2. Check if it is time to Uplink
             if (sampleCount >= numSamples) {
-                // Fan RPM measurement removed in V3
+                // Read battery voltage once before sending
+                // Read battery voltage from ADS1115 channel A3 (0.1875 mV/bit at default gain)
+                // battery_voltage_mv = (uint16_t)(ads.readADC_SingleEnded(3) * 0.1875f);
+                battery_voltage_mv = getBatteryVoltage();
                 prepareTxFrame(appPort);
                 LoRaWAN.send();
                 //reset the values
