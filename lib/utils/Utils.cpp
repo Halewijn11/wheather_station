@@ -6,8 +6,12 @@
 // extern const int pulses_per_rev
 
 volatile unsigned int fan_pulse_count = 0;
-volatile unsigned long last_micros_rain = 0;
-volatile unsigned long last_micros_wind = 0;
+
+// Simple state-based debouncing without persistent timing
+volatile uint8_t rain_debounce_state = 0;
+volatile uint8_t wind_debounce_state = 0;
+volatile unsigned long rain_debounce_timer = 0;
+volatile unsigned long wind_debounce_timer = 0;
 
 const int pulses_per_rev = 2;
 const int pwm_bit_depth =65536;
@@ -95,13 +99,15 @@ Ina3221Reading readIna3221Channel(Adafruit_INA3221& ina3221,uint8_t channel) {
 
 // ##################### everything for the rain sensor ###############################3
 volatile unsigned int rain_pulse_count = 0;
+volatile unsigned long last_millis_rain = 0;
+
 void rain_Counter() {
-  unsigned long current_micros = micros();
-    // Ignore pulses that happen within 800,000 microseconds (800ms) of each other
-  if (current_micros - last_micros_rain > 800000) {
+  unsigned long current_millis = millis();
+  // Ignore pulses that happen within 500 milliseconds (0.5s) of each other
+  if (current_millis - last_millis_rain > 500) {
     rain_pulse_count++;
     // Serial.println("pulse!");
-    last_micros_rain = current_micros;
+    last_millis_rain = current_millis;
   }
   
   // Serial.println("total read rain pulses:");
@@ -112,14 +118,18 @@ void rain_Counter() {
 
 // ##################### everything for the wind sensor ###############################3
 volatile unsigned int wind_pulse_count = 0;
+volatile unsigned long last_millis_wind = 0;
+
 void wind_Counter() {
-  unsigned long current_micros = micros();
-    // Ignore pulses that happen within 200,000 microseconds (200ms) of each other
-  if (current_micros - last_micros_wind > 200000) {
+  unsigned long current_millis = millis();
+  // We use a small debounce threshold like 10ms for wind
+  // as it spins much faster than the rain bucket tips. 
+  // Adjust this smaller (e.g. 5ms) if the anemometer spins incredibly fast.
+  if (current_millis - last_millis_wind > 10) {
     wind_pulse_count++;
-    last_micros_wind = current_micros;
+    last_millis_wind = current_millis;
+    // Serial.println("Wind pulse counted!");
   }
-  // Serial.println("pulse!");
 }
 
 // ##################### everything for the wind direction ###############################3
