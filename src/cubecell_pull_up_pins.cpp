@@ -16,8 +16,8 @@ void setup() {
   // 3. Force Internal Pull-ups
   // SDA is typically GPIO29 / SCL is typically GPIO30 on AB01
   // This command tells the pin to stay at 3.3V unless pulled down
-  pinMode(SDA, INPUT_PULLUP);
-  pinMode(SCL, INPUT_PULLUP);
+  // pinMode(SDA, INPUT_PULLUP);
+  // pinMode(SCL, INPUT_PULLUP);
 
   Serial.println("I2C Bus Initialized with Internal Pull-ups");
 }

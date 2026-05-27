@@ -82,10 +82,15 @@
 #include <Arduino.h>
 
 void setup() {
+  // CubeCell Power Management: Turn on Vext to power all sensors/peripherals
+  pinMode(Vext, OUTPUT);
+  digitalWrite(Vext, LOW); 
+  delay(500); // Wait for the power rail to stabilize
+  
   Wire.begin();
   Serial.begin(115200);
   while (!Serial); // Wait for Serial Monitor
-  Serial.println("\nI2C Scanner");
+  Serial.println("\nI2C Scanner (Vext Enabled)");
 }
 
 void loop() {
