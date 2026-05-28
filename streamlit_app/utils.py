@@ -148,6 +148,21 @@ def get_data(discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
     df = tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=num_batteries, voltage_col=voltage_col)
     return df
 
+@st.cache_data(ttl=5*60)
+def get_forecast_df():
+    sheet_id = "1ZMczLO4qHjzeHy8-fJdS5QZ2bOlziQlb_0pUwslPZl0"
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=0"
+    df = pd.read_csv(url)
+    df['fetched_at'] = pd.to_datetime(df['fetched_at'], utc=True)
+    df['forecast_for'] = pd.to_datetime(df['forecast_for'], utc=True)
+    # Keep only the rows from the latest fetch batch
+    latest_fetch = df['fetched_at'].max()
+    df = df[df['fetched_at'] == latest_fetch].copy()
+    # Rename to match the x-axis convention used throughout the dashboard
+    df = df.rename(columns={'forecast_for': 'received_at'})
+    df = df.sort_values('received_at').reset_index(drop=True)
+    return df
+
 def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
     # Ensure the index is datetime for resampling
     df = df.copy()
@@ -559,7 +574,7 @@ class TimeSeriesDashboardItem:
                              var_name='Variable', value_name='Value')
         return melted, labels, colors
 
-    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False):
+    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None):
         if df.empty:
             st.warning(f"No data for {self.metric_title}")
             return
@@ -580,6 +595,9 @@ class TimeSeriesDashboardItem:
             else:
                 y_min = float(melted_df['Value'].min())
                 y_max = float(melted_df['Value'].max())
+                if prediction_df is not None and prediction_col is not None and not prediction_df.empty:
+                    y_min = min(y_min, float(prediction_df[prediction_col].min()))
+                    y_max = max(y_max, float(prediction_df[prediction_col].max()))
                 padding = (y_max - y_min) * 0.1 if y_max != y_min else 1
                 y_domain = [y_min - padding, y_max + padding]
 
@@ -638,7 +656,23 @@ class TimeSeriesDashboardItem:
                 opacity=alt.condition(nearest, alt.value(1), alt.value(0))
             )
 
-            chart = alt.layer(main_mark, selectors, rules, points).properties(
+            layers = [main_mark, selectors, rules, points]
+
+            if prediction_df is not None and prediction_col is not None and not prediction_df.empty:
+                pred_line = alt.Chart(prediction_df).mark_line(
+                    strokeWidth=2, strokeDash=[6, 3], opacity=0.8, color='#F97316'
+                ).encode(
+                    x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(format='%H:%M')),
+                    y=alt.Y(f"{prediction_col}:Q",
+                            scale=alt.Scale(domain=y_domain, clamp=True)),
+                    tooltip=[
+                        alt.Tooltip(f"{x_col}:T", title="Forecast time", format='%d %b %H:%M'),
+                        alt.Tooltip(f"{prediction_col}:Q", title="Forecast", format='.1f'),
+                    ]
+                )
+                layers.append(pred_line)
+
+            chart = alt.layer(*layers).properties(
                 width='container', height=height
             ).interactive()
 
