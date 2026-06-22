@@ -141,7 +141,7 @@ uint32_t adcWinddirectionChannel = 1;
 uint32_t adcLightIntensityChannel = 0;
 
 // Increment this whenever you change the payload structure
-uint8_t payloadVersion = 4;
+uint8_t payloadVersion = 5;
 uint16_t battery_voltage_mv = 0;
 
 /* Prepares the payload of the frame */
@@ -155,7 +155,7 @@ static void prepareTxFrame( uint8_t port ) {
     windSpeedTracker.pack(appData, cursor);
     bmp280Tempstats.pack(appData, cursor, sampleCount, 100, 2);
     bmp280Pressurestats.pack(appData, cursor, sampleCount, 100, 4);
-    lightIntensityStats.pack(appData, cursor, sampleCount, 100, 2);
+    lightIntensityStats.pack(appData, cursor, sampleCount, 10, 2);
     shtTempstats.pack(appData, cursor, sampleCount, 100, 2);
     shtHumidityStats.pack(appData, cursor, sampleCount, 100, 2);
     rainTracker.pack(appData, cursor); 

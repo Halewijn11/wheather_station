@@ -212,10 +212,15 @@ utils.TimeSeriesDashboardItem(
 
  # #--------------------- wind speed -----------------------------
 utils.TimeSeriesDashboardItem(
-    metric_title="Wind pulses", 
-    unit="", 
-    y_col_main="wind_pulses_total", 
+    metric_title="Wind speed",
+    unit="km/h",
+    y_col_main="wind_speed_kmh_avg",
+    y_col_main_label="average",
     main_color="#1E90FF" # Grey
+).add_extra_series(
+    col_name="wind_speed_kmh_max",
+    label="max",
+    color="#93C5FD"
 ).plot(time_window_df, format=".0f")
 
  # #--------------------- wind direction -----------------------------
@@ -224,7 +229,7 @@ utils.TimeSeriesDashboardItem(
     unit="°", 
     y_col_main="wind_direction", 
     main_color="#1E90FF" # Purple
-).plot(time_window_df, y_limits=[0, 360], format=".0f")
+).plot(time_window_df, y_limits=[0, 360], format=".0f", chart_type='scatter')
 
  # #--------------------- rain pulses -----------------------------
 utils.TimeSeriesDashboardItem(

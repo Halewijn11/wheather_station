@@ -30,6 +30,7 @@ function doPost(e) {
       rssi,
       snr,
       rawPayload,
+      decoded.version !== undefined ? decoded.version : "",
       // BMP Temperature
       getVal(decoded, 'bmp_temperature', 'avg'),
       getVal(decoded, 'bmp_temperature', 'max'),
@@ -56,15 +57,15 @@ function doPost(e) {
       getVal(decoded, 'wind', 'pulses_max'),
       getVal(decoded, 'wind', 'pulses_min'),
       getVal(decoded, 'wind', 'pulses_total'),
-
-      // Power metrics
-      getVal(decoded, 'power', 'voltage_V'),
-      getVal(decoded, 'power', 'current_mA'),
-      getVal(decoded, 'power', 'power_mW'),
       // Rain
+      // getVal(decoded, 'wind', 'pulses_total'),
       decoded.rain_pulses !== undefined ? decoded.rain_pulses : "",
       // Battery Voltage (mV) - V4+
-      decoded.battery_mv !== undefined ? decoded.battery_mv : ""
+      decoded.battery_v !== undefined ? decoded.battery_v : "",
+
+      // 14. Wind Speed (km/h) - new fields appended at the end, existing columns untouched
+      getVal(decoded.wind || {}, 'speed_kmh', 'avg'),
+      getVal(decoded.wind || {}, 'speed_kmh', 'max')
     ];
 
     // 3. LOG TO SHEET

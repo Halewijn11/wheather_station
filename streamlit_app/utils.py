@@ -605,6 +605,8 @@ class TimeSeriesDashboardItem:
             # 2. Mark Type
             if chart_type == 'area':
                 main_mark = base.mark_area(opacity=0.4, point=show_dots)
+            elif chart_type == 'scatter':
+                main_mark = base.mark_point(size=40, filled=True)
             else:
                 main_mark = base.mark_line(strokeWidth=2, point=show_dots)
 
