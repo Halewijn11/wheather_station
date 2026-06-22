@@ -1,0 +1,53 @@
+function fetchAndLog12HourPrediction() {
+  var apiKey = "d745f1816c791dffa66999bc979ae349"; 
+  var lat = "50.908"; 
+  var lon = "4.113";
+  
+  var urlPart1 = "https://api.openweathermap.org/data/4.0/onecall/timeline/15min?lat=" + lat + "&lon=" + lon + "&appid=" + apiKey + "&units=metric";
+  
+  try {
+    // --- Part 1: first ~12 hours ---
+    var response1 = UrlFetchApp.fetch(urlPart1);
+    var json1 = JSON.parse(response1.getContentText());
+    var forecastData = json1.data;
+
+    // --- Part 2: next ~12 hours via the pagination URL ---
+    var urlPart2 = json1.next + "&units=metric";
+    var response2 = UrlFetchApp.fetch(urlPart2);
+    var json2 = JSON.parse(response2.getContentText());
+    forecastData = forecastData.concat(json2.data);
+
+    // --- CONNECT TO YOUR EXISTING SHEET HERE ---
+    // Option A: Paste the entire URL link
+    var targetSpreadsheet = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1ZMczLO4qHjzeHy8-fJdS5QZ2bOlziQlb_0pUwslPZl0/edit?gid=0#gid=0");
+    
+    // Option B (Alternative): Use just the ID string between /d/ and /edit
+    // var targetSpreadsheet = SpreadsheetApp.openById("1aBcD123XYZ_this_part_is_your_spreadsheet_id");
+    
+    // Get the specific tab name inside that spreadsheet
+    var sheet = targetSpreadsheet.getSheetByName("Sheet1");
+    // -------------------------------------------
+    
+    var fetchedAt = new Date(); 
+    
+    for (var i = 0; i < forecastData.length; i++) {
+      var block = forecastData[i];
+      var forecastFor = new Date(block.dt * 1000); 
+      
+      sheet.appendRow([
+        fetchedAt, 
+        forecastFor, 
+        block.temp, 
+        block.wind_speed, 
+        block.wind_deg,
+        block.pressure,
+        block.humidity
+      ]);
+    }
+    
+    Logger.log("Successfully appended " + forecastData.length + " rows to your linked sheet!");
+    
+  } catch (error) {
+    Logger.log("Error: " + error.toString());
+  }
+}

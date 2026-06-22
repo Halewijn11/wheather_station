@@ -119,11 +119,21 @@ else:
     
 if st.button("Refresh Data"):
     utils.get_data.clear()
+    utils.get_forecast_df.clear()
     st.success("Data refreshed!")
 
 
 # Create the dropdown (selectbox)
 selected_label = utils.get_shared_time_range_selection("Select Time Range:")
+
+# Forecast toggle — only available for the "Since Midnight" view
+show_forecast = False
+if selected_label == "Since Midnight":
+    show_forecast = st.toggle("Show weather forecast", value=False)
+
+forecast_df = pd.DataFrame()
+if show_forecast:
+    forecast_df = utils.get_forecast_df()
 
 # Filter by the label defined in our config
 filtered_df = utils.filter_by_recency(df, window_label=selected_label, mode=time_window_filtering_mode)
@@ -152,7 +162,7 @@ utils.TimeSeriesDashboardItem(
     col_name="sht_temperature_min",
     label="min",
     color="#1D4ED8"
-).plot(time_window_df)
+).plot(time_window_df, prediction_df=forecast_df, prediction_col='temp')
 
 # #--------------------- humidity -----------------------------
 utils.TimeSeriesDashboardItem(
@@ -169,7 +179,7 @@ utils.TimeSeriesDashboardItem(
     col_name="sht_humidity_min",
     label="min",
     color="#1D4ED8"
-).plot(time_window_df, format=".0f")
+).plot(time_window_df, format=".0f", prediction_df=forecast_df, prediction_col='humidity')
 
  # #--------------------- pressure -----------------------------
 if not time_window_df.empty:
@@ -192,7 +202,7 @@ utils.TimeSeriesDashboardItem(
     col_name="bmp_pressure_min",
     label="min",
     color="#93C5FD"
-).plot(time_window_df, format=".0f")
+).plot(time_window_df, format=".0f", prediction_df=forecast_df, prediction_col='pressure')
 
  # #--------------------- light intensity -----------------------------
 utils.TimeSeriesDashboardItem(
@@ -229,7 +239,17 @@ utils.TimeSeriesDashboardItem(
     unit="°", 
     y_col_main="wind_direction", 
     main_color="#1E90FF" # Purple
-).plot(time_window_df, y_limits=[0, 360], format=".0f", chart_type='scatter')
+).plot(time_window_df, y_limits=[0, 360], format=".0f", prediction_df=forecast_df, prediction_col='wind_deg')
+
+ # #--------------------- wind speed forecast -----------------------------
+# The sensor records wind pulses (not m/s), so forecast wind speed is shown separately.
+if show_forecast and not forecast_df.empty:
+    utils.TimeSeriesDashboardItem(
+        metric_title="Wind speed (forecast)",
+        unit="m/s",
+        y_col_main="wind_speed",
+        main_color="#F97316"
+    ).plot(forecast_df)
 
  # #--------------------- rain pulses -----------------------------
 utils.TimeSeriesDashboardItem(
