@@ -52,7 +52,6 @@ Ina3221Reading readIna3221Channel(Adafruit_INA3221& ina3221,uint8_t channel) {
 
 // ##################### everything for the rain sensor ###############################3
 volatile unsigned int rain_pulse_count = 0;
-volatile unsigned long last_millis_rain = 0;
 
 void rain_Counter() {
   unsigned long current_millis = millis();
@@ -71,7 +70,6 @@ void rain_Counter() {
 
 // ##################### everything for the wind sensor ###############################3
 volatile unsigned int wind_pulse_count = 0;
-volatile unsigned long last_millis_wind = 0;
 
 void wind_Counter() {
   unsigned long current_millis = millis();

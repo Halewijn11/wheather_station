@@ -1,0 +1,40 @@
+{
+  "battery_v": 4.234,
+  "bmp_temperature": {
+    "avg": 25.35,
+    "max": 25.52,
+    "min": 25.19
+  },
+  "light_solar": {
+    "avg": 6.6,
+    "max": 7.4,
+    "min": 5.6
+  },
+  "pressure_pa": {
+    "avg": 101947.39,
+    "max": 101953.64,
+    "min": 101942.83
+  },
+  "rain_pulses": 0,
+  "sht_humidity": {
+    "avg": 77.01,
+    "max": 77.95,
+    "min": 75.97
+  },
+  "sht_temperature": {
+    "avg": 24.25,
+    "max": 24.49,
+    "min": 24.05
+  },
+  "version": 5,
+  "wind": {
+    "direction_deg": 283,
+    "pulses_max": 0,
+    "pulses_min": 0,
+    "pulses_total": 0,
+    "speed_kmh": {
+      "avg": 0,
+      "max": 0
+    }
+  }
+}

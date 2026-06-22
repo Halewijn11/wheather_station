@@ -12,6 +12,23 @@ function decodeUplink(input) {
         return value >>> 0;
     }
 
+    // --- Wind speed conversion ---
+    // Must match the firmware's measurementInterval_s / numSamples (cubecell_battery_main.cpp):
+    // pulses_max is the highest pulse count from a single WIND_SAMPLE_INTERVAL_S window,
+    // pulses_total is the sum of pulse counts across WIND_SAMPLES_PER_REPORT windows.
+    var WIND_SAMPLE_INTERVAL_S = 5;
+    var WIND_SAMPLES_PER_REPORT = 60;
+    var PULSE_PER_SEC_TO_KMH = 3.61; // anemometer calibration: 1 pulse/second = 3.61 km/h
+
+    function pulsesToWindSpeedKmh(pulsesTotal, pulsesMax) {
+        var avgPulsesPerSec = pulsesTotal / (WIND_SAMPLES_PER_REPORT * WIND_SAMPLE_INTERVAL_S);
+        var maxPulsesPerSec = pulsesMax / WIND_SAMPLE_INTERVAL_S;
+        return {
+            avg: avgPulsesPerSec * PULSE_PER_SEC_TO_KMH,
+            max: maxPulsesPerSec * PULSE_PER_SEC_TO_KMH
+        };
+    }
+
     // --- STEP 1: Identify the Version ---
     var payloadVersion = readUint(1);
 
@@ -77,7 +94,8 @@ function decodeUplink(input) {
                     direction_deg: windDirAvg,
                     pulses_total: windSpeedTotal,
                     pulses_min: windSpeedMin,
-                    pulses_max: windSpeedMax
+                    pulses_max: windSpeedMax,
+                    speed_kmh: pulsesToWindSpeedKmh(windSpeedTotal, windSpeedMax)
                 },
                 bmp_temperature: {
                     avg: bmpTempAvg,
@@ -173,7 +191,8 @@ function decodeUplink(input) {
                             direction_deg: v2_windDirAvg,
                             pulses_total: v2_windSpeedTotal,
                             pulses_min: v2_windSpeedMin,
-                            pulses_max: v2_windSpeedMax
+                            pulses_max: v2_windSpeedMax,
+                            speed_kmh: pulsesToWindSpeedKmh(v2_windSpeedTotal, v2_windSpeedMax)
                         },
                         bmp_temperature: {
                             avg: v2_bmpTempAvg,
@@ -250,7 +269,8 @@ function decodeUplink(input) {
                             direction_deg: v3_windDirAvg,
                             pulses_total: v3_windSpeedTotal,
                             pulses_min: v3_windSpeedMin,
-                            pulses_max: v3_windSpeedMax
+                            pulses_max: v3_windSpeedMax,
+                            speed_kmh: pulsesToWindSpeedKmh(v3_windSpeedTotal, v3_windSpeedMax)
                         },
                         bmp_temperature: {
                             avg: v3_bmpTempAvg,
@@ -329,7 +349,8 @@ function decodeUplink(input) {
                             direction_deg: v4_windDirAvg,
                             pulses_total: v4_windSpeedTotal,
                             pulses_min: v4_windSpeedMin,
-                            pulses_max: v4_windSpeedMax
+                            pulses_max: v4_windSpeedMax,
+                            speed_kmh: pulsesToWindSpeedKmh(v4_windSpeedTotal, v4_windSpeedMax)
                         },
                         bmp_temperature: {
                             avg: v4_bmpTempAvg,
@@ -358,6 +379,87 @@ function decodeUplink(input) {
                         },
                         rain_pulses: v4_rainTotal,
                         battery_v: v4_battery
+                    };
+                    break;
+
+        case 5: // V5: Weather Station + Battery Voltage (light scale x10, max ~6553 W/m²)
+
+                    // 01. Wind Direction
+                    var v5_windDirAvg = readUint(2);
+
+                    // 02. Wind Speed
+                    var v5_windSpeedTotal = readUint(2);
+                    var v5_windSpeedMin = readUint(2);
+                    var v5_windSpeedMax = readUint(2);
+
+                    // 03. BMP280 Temperature
+                    var v5_bmpTempAvg = readUint(2) / 100.0;
+                    var v5_bmpTempMin = readUint(2) / 100.0;
+                    var v5_bmpTempMax = readUint(2) / 100.0;
+
+                    // 04. BMP280 Pressure
+                    var v5_bmpPressAvg = readUint(4) / 100.0;
+                    var v5_bmpPressMin = readUint(4) / 100.0;
+                    var v5_bmpPressMax = readUint(4) / 100.0;
+
+                    // 05. Light Intensity (scale x10 → divide by 10, max ~6553 W/m², precision 0.1)
+                    var v5_lightAvg = readUint(2) / 10.0;
+                    var v5_lightMin = readUint(2) / 10.0;
+                    var v5_lightMax = readUint(2) / 10.0;
+
+                    // 06. SHT Temperature
+                    var v5_shtTempAvg = readUint(2) / 100.0;
+                    var v5_shtTempMin = readUint(2) / 100.0;
+                    var v5_shtTempMax = readUint(2) / 100.0;
+
+                    // 07. SHT Humidity
+                    var v5_shtHumidAvg = readUint(2) / 100.0;
+                    var v5_shtHumidMin = readUint(2) / 100.0;
+                    var v5_shtHumidMax = readUint(2) / 100.0;
+
+                    // 08. Rain
+                    var v5_rainTotal = readUint(2);
+
+                    // 09. Battery Voltage (mV)
+                    var v5_battery = readUint(2) / 1000.0; // Convert mV to V
+
+                    // --- Construct the Final Object ---
+                    data = {
+                        version: payloadVersion,
+                        wind: {
+                            direction_deg: v5_windDirAvg,
+                            pulses_total: v5_windSpeedTotal,
+                            pulses_min: v5_windSpeedMin,
+                            pulses_max: v5_windSpeedMax,
+                            speed_kmh: pulsesToWindSpeedKmh(v5_windSpeedTotal, v5_windSpeedMax)
+                        },
+                        bmp_temperature: {
+                            avg: v5_bmpTempAvg,
+                            min: v5_bmpTempMin,
+                            max: v5_bmpTempMax
+                        },
+                        pressure_pa: {
+                            avg: v5_bmpPressAvg,
+                            min: v5_bmpPressMin,
+                            max: v5_bmpPressMax
+                        },
+                        light_solar: {
+                            avg: v5_lightAvg,
+                            min: v5_lightMin,
+                            max: v5_lightMax
+                        },
+                        sht_temperature: {
+                            avg: v5_shtTempAvg,
+                            min: v5_shtTempMin,
+                            max: v5_shtTempMax
+                        },
+                        sht_humidity: {
+                            avg: v5_shtHumidAvg,
+                            min: v5_shtHumidMin,
+                            max: v5_shtHumidMax
+                        },
+                        rain_pulses: v5_rainTotal,
+                        battery_v: v5_battery
                     };
                     break;
 
