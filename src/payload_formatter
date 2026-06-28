@@ -19,6 +19,7 @@ function decodeUplink(input) {
     var WIND_SAMPLE_INTERVAL_S = 5;
     var WIND_SAMPLES_PER_REPORT = 60;
     var PULSE_PER_SEC_TO_KMH = 3.61; // anemometer calibration: 1 pulse/second = 3.61 km/h
+    var MM_PER_RAIN_PULSE = 0.2; // tipping bucket calibration: 0.2 mm per tip
 
     function pulsesToWindSpeedKmh(pulsesTotal, pulsesMax) {
         var avgPulsesPerSec = pulsesTotal / (WIND_SAMPLES_PER_REPORT * WIND_SAMPLE_INTERVAL_S);
@@ -123,6 +124,7 @@ function decodeUplink(input) {
                     max: shtHumidMax
                 },
                 rain_pulses: rainTotal,
+                rain_mm: rainTotal * MM_PER_RAIN_PULSE,
                 electrical: {
                     voltage_v: {
                         avg: voltAvg,
@@ -220,6 +222,7 @@ function decodeUplink(input) {
                             max: v2_shtHumidMax
                         },
                         rain_pulses: v2_rainTotal,
+                        rain_mm: v2_rainTotal * MM_PER_RAIN_PULSE,
                         rpm: v2_rpm
                     };
                     break;
@@ -297,7 +300,8 @@ function decodeUplink(input) {
                             min: v3_shtHumidMin,
                             max: v3_shtHumidMax
                         },
-                        rain_pulses: v3_rainTotal
+                        rain_pulses: v3_rainTotal,
+                        rain_mm: v3_rainTotal * MM_PER_RAIN_PULSE
                     };
                     break;
 
@@ -378,6 +382,7 @@ function decodeUplink(input) {
                             max: v4_shtHumidMax
                         },
                         rain_pulses: v4_rainTotal,
+                        rain_mm: v4_rainTotal * MM_PER_RAIN_PULSE,
                         battery_v: v4_battery
                     };
                     break;
@@ -459,6 +464,7 @@ function decodeUplink(input) {
                             max: v5_shtHumidMax
                         },
                         rain_pulses: v5_rainTotal,
+                        rain_mm: v5_rainTotal * MM_PER_RAIN_PULSE,
                         battery_v: v5_battery
                     };
                     break;

@@ -65,7 +65,9 @@ function doPost(e) {
 
       // 14. Wind Speed (km/h) - new fields appended at the end, existing columns untouched
       getVal(decoded.wind || {}, 'speed_kmh', 'avg'),
-      getVal(decoded.wind || {}, 'speed_kmh', 'max')
+      getVal(decoded.wind || {}, 'speed_kmh', 'max'),
+      // Rain (mm) - converted from pulses (0.2 mm/tip) by the payload decoder
+      decoded.rain_mm !== undefined ? decoded.rain_mm : ""
     ];
 
     // 3. LOG TO SHEET
