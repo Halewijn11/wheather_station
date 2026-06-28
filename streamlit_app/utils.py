@@ -175,7 +175,7 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
             for col in cumulative_cols:
                 if col in df.columns:
                     target_colname = f"{col}_cumulated"
-                    df[target_colname] = df[col].fillna(0).groupby(df.index.date).cumsum()
+                    df[target_colname] = df[col].fillna(0).groupby(df.index.tz_convert('Europe/Brussels').date).cumsum()
         return df.reset_index()
 
     # Define resolution based on selection
@@ -212,7 +212,7 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
             if col in resampled_df.columns:
                 target_colname = f"{col}_cumulated"
                 # Group by date so the cumsum resets to 0 at midnight each day
-                resampled_df[target_colname] = resampled_df[col].fillna(0).groupby(resampled_df.index.date).cumsum()
+                resampled_df[target_colname] = resampled_df[col].fillna(0).groupby(resampled_df.index.tz_convert('Europe/Brussels').date).cumsum()
 
     return resampled_df.reset_index()
 
@@ -574,20 +574,20 @@ class TimeSeriesDashboardItem:
                              var_name='Variable', value_name='Value')
         return melted, labels, colors
 
-    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None):
+    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None):
         if df.empty:
             st.warning(f"No data for {self.metric_title}")
             return
 
         col1, col2 = st.columns([1, 2])
-        
+
         latest_val = df[self.y_col_main].iloc[-1]
         with col1:
             st.metric(self.metric_title, f"{latest_val:{format}} {self.unit}")
 
         with col2:
             melted_df, labels, colors = self._prepare_data(df, x_col)
-            
+
             # 1. Base Encoding
             # Calculate Y-axis domain
             if y_limits:
@@ -606,10 +606,19 @@ class TimeSeriesDashboardItem:
                 # Only apply custom scale if colors are provided
                 color_scale = alt.Scale(domain=labels, range=colors)
 
+            if y_tick_labels:
+                tick_values = list(y_tick_labels.keys())
+                label_expr = ' : '.join([f"datum.value === {v} ? '{l}'" for v, l in y_tick_labels.items()]) + " : ''"
+                y_encoding = alt.Y("Value:Q", title=y_label or self.unit,
+                                   scale=alt.Scale(domain=y_domain, clamp=True),
+                                   axis=alt.Axis(values=tick_values, labelExpr=label_expr))
+            else:
+                y_encoding = alt.Y("Value:Q", title=y_label or self.unit,
+                                   scale=alt.Scale(domain=y_domain, clamp=True))
+
             base = alt.Chart(melted_df).encode(
                 x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(format='%H:%M')),
-                y=alt.Y("Value:Q", title=y_label or self.unit, 
-                        scale=alt.Scale(domain=y_domain, clamp=True)),
+                y=y_encoding,
                 color=alt.Color("Variable:N", 
                                 scale=color_scale,
                                 title=None, # Remove the "Variable" title from legend

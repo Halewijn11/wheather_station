@@ -142,8 +142,8 @@ filtered_df = utils.filter_by_recency(df, window_label=selected_label, mode=time
 time_window_df = utils.resample_data(
     filtered_df, 
     selected_label, 
-    sum_cols=['rain_pulses', 'wind_pulses_total'],
-    cumulative_cols=['rain_pulses']
+    sum_cols=['rain_mm', 'wind_pulses_total'],
+    cumulative_cols=['rain_mm']
 )
 
 
@@ -235,11 +235,19 @@ utils.TimeSeriesDashboardItem(
 
  # #--------------------- wind direction -----------------------------
 utils.TimeSeriesDashboardItem(
-    metric_title="Wind direction", 
-    unit="°", 
-    y_col_main="wind_direction", 
-    main_color="#1E90FF" # Purple
-).plot(time_window_df, y_limits=[0, 360], format=".0f", prediction_df=forecast_df, prediction_col='wind_deg')
+    metric_title="Wind direction",
+    unit="°",
+    y_col_main="wind_direction",
+    main_color="#1E90FF"
+).plot(
+    time_window_df,
+    chart_type='scatter',
+    y_limits=[0, 360],
+    format=".0f",
+    prediction_df=forecast_df,
+    prediction_col='wind_deg',
+    y_tick_labels={0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW', 360: 'N'}
+)
 
  # #--------------------- wind speed forecast -----------------------------
 # The sensor records wind pulses (not m/s), so forecast wind speed is shown separately.
@@ -253,16 +261,16 @@ if show_forecast and not forecast_df.empty:
 
  # #--------------------- rain pulses -----------------------------
 utils.TimeSeriesDashboardItem(
-    metric_title="Rain pulses", 
-    unit="", 
-    y_col_main="rain_pulses", 
-    y_col_main_label="rain pulses",
+    metric_title="Rain",
+    unit="mm",
+    y_col_main="rain_mm",
+    y_col_main_label="rain (mm)",
     main_color="#93C5FD" # Turquoise
 ).add_extra_series(
-    col_name="rain_pulses_cumulated",
-    label="cummulated rain pulses",
+    col_name="rain_mm_cumulated",
+    label="cumulated rain (mm)",
     color="#00CED1"
-).plot(time_window_df,format=".0f")
+).plot(time_window_df,format=".1f")
 
 #  #--------------------- wind direction as a function of tiem -----------------------------
 # radial_coords_df = utils.transform_to_radial_cartesian(time_window_df,'received_at', 'wind_direction')
