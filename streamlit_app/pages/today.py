@@ -93,8 +93,9 @@ def local_time_str(ts):
 # #--------------------- temperature -----------------------------
 st.subheader("Temperature")
 temp_stats = stat_with_time(filtered_df, "sht_temperature_avg")
+temp_24h_ago_val, _ = utils.value_at_offset(df, "sht_temperature_avg", 24 * 3600)
 
-thermo_col, col1, col2, col3 = st.columns([1.2, 1, 1, 1])
+thermo_col, col1, col2, col3, col4 = st.columns([1.2, 1, 1, 1, 1])
 with thermo_col:
     st.markdown(
         utils.render_thermometer(temp_stats['current'], min_val=-10, max_val=40, unit="°C", width=70, height=168),
@@ -108,6 +109,12 @@ with col2:
 with col3:
     st.metric("Max", f"{temp_stats['max_val']:.1f} °C")
     st.caption(f"at {local_time_str(temp_stats['max_time'])}")
+with col4:
+    if temp_24h_ago_val is not None:
+        delta = temp_stats['current'] - temp_24h_ago_val
+        st.metric("24h ago", f"{delta:+.1f} °C")
+    else:
+        st.metric("24h ago", "N/A")
 
 # #--------------------- pressure -----------------------------
 st.subheader("Pressure")

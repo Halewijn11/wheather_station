@@ -110,6 +110,15 @@ def filter_by_recency(df, window_label=None, hours=0, minutes=0, seconds=0,
     return df
 
 
+def value_at_offset(frame, col, seconds_ago, time_colname='seconds_since_now'):
+    """Finds the row whose recency is closest to `seconds_ago` and returns (value, received_at)."""
+    valid = frame.dropna(subset=[col, time_colname])
+    if valid.empty:
+        return None, None
+    idx = (valid[time_colname] - seconds_ago).abs().idxmin()
+    return valid.loc[idx, col], valid.loc[idx, "received_at"]
+
+
 def filter_data(df, window_hours=1, mode='live'):
     if df.empty:
         return df
@@ -137,10 +146,15 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, volt
     now = pd.Timestamp.now(tz='UTC')
     df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
     df['battery_percentage'] = df.apply(
-    lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row[voltage_col]) 
-    if pd.notnull(row[voltage_col]) else np.nan, 
+    lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row[voltage_col])
+    if pd.notnull(row[voltage_col]) else np.nan,
     axis=1
     )
+
+    # Sensor noise shows up as tiny non-zero readings at night; treat anything below 0.5 as 0.
+    for col in ('light_intensity_avg', 'light_intensity_max', 'light_intensity_min'):
+        if col in df.columns:
+            df.loc[df[col] < 0.5, col] = 0
 
     return df
 
@@ -577,7 +591,7 @@ class TimeSeriesDashboardItem:
                              var_name='Variable', value_name='Value')
         return melted, labels, colors
 
-    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None, min_max_df=None, min_col=None, max_col=None, show_metric=True):
+    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None, min_max_df=None, min_col=None, max_col=None, show_metric=True, compare_val=None, compare_label=None):
         if df.empty:
             st.warning(f"No data for {self.metric_title}")
             return
@@ -593,6 +607,16 @@ class TimeSeriesDashboardItem:
                     max_val = min_max_df[max_col].max()
                     if pd.notna(min_val) and pd.notna(max_val):
                         st.caption(f"min {min_val:{format}}{self.unit} · max {max_val:{format}}{self.unit}")
+
+                if compare_val is not None and pd.notna(compare_val):
+                    delta = latest_val - compare_val
+                    arrow = "▲" if delta > 0 else ("▼" if delta < 0 else "▶")
+                    arrow_color = "#16A34A" if delta > 0 else ("#DC2626" if delta < 0 else "#6B7280")
+                    st.caption(
+                        f"{compare_label or 'change'} {delta:+{format}}{self.unit} "
+                        f"<span style='color:{arrow_color}'>{arrow}</span>",
+                        unsafe_allow_html=True
+                    )
         else:
             col2 = st.container()
 
