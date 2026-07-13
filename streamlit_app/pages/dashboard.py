@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import utils
 from streamlit_extras.metric_cards import style_metric_cards
+from streamlit_autorefresh import st_autorefresh
 import altair as alt
 import numpy as np
 import os
@@ -12,6 +13,11 @@ debug = 0
 cached_time = 0
 time_window_hours = 1
 time_window_filtering_mode = 'last_session'
+
+# Rerun the page every 60s so it picks up new data as soon as the
+# 3-minute get_data() cache (see utils.py) expires, without needing
+# a manual "Refresh Data" click.
+st_autorefresh(interval=60_000, key="dashboard_autorefresh")
 
 
 

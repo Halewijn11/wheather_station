@@ -11,6 +11,17 @@ df = utils.get_data(discharge_curve)
 
 st.title("Today")
 
+last_datapoint = df['received_at'].max()
+if pd.notna(last_datapoint):
+    last_datapoint_ts = pd.Timestamp(last_datapoint)
+    if last_datapoint_ts.tzinfo is None:
+        last_datapoint_ts = last_datapoint_ts.tz_localize('UTC')
+    last_datapoint_local = last_datapoint_ts.tz_convert('Europe/Brussels')
+    last_datapoint_str = f"{last_datapoint_local.strftime('%a')} {last_datapoint_local.day} {last_datapoint_local.strftime('%b')} {last_datapoint_local.strftime('%H:%M')}"
+    st.caption(f"Last datapoint on: {last_datapoint_str}")
+else:
+    st.caption("Last datapoint on: N/A")
+
 # #--------------------- sunset and sunrise -----------------------------
 sunrise_str, sunset_str = utils.get_sunrise_sunset()
 icon_width = 6
@@ -118,6 +129,27 @@ with p_col2:
 with p_col3:
     st.metric("Max", f"{pressure_stats['max_val']:.1f} hPa")
     st.caption(f"at {local_time_str(pressure_stats['max_time'])}")
+
+# #--------------------- rain -----------------------------
+st.subheader("Rain")
+
+
+def rain_total(frame, window_label):
+    windowed = utils.filter_by_recency(frame, window_label=window_label, mode='last_session')
+    if windowed.empty:
+        return 0.0
+    return windowed["rain_mm"].fillna(0).sum()
+
+
+rain_col1, rain_col2, rain_col3, rain_col4 = st.columns(4)
+with rain_col1:
+    st.metric("Today", f"{rain_total(df, 'Since Midnight'):.1f} mm")
+with rain_col2:
+    st.metric("Last 24h", f"{rain_total(df, 'Last 24 Hours'):.1f} mm")
+with rain_col3:
+    st.metric("This month", f"{rain_total(df, 'This Month'):.1f} mm")
+with rain_col4:
+    st.metric("This year", f"{rain_total(df, 'This Year'):.1f} mm")
 
 # #--------------------- wind -----------------------------
 def render_wind_rose_section(title, speed_col):
