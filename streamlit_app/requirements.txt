@@ -1,4 +1,5 @@
 streamlit-extras
+streamlit-autorefresh
 astral
 streamlit
 pandas

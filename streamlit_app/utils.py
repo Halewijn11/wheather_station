@@ -59,7 +59,7 @@ def filter_by_recency(df, window_label=None, hours=0, minutes=0, seconds=0,
                       colname_unit = 'seconds', mode = 'live'):
     """
     Filters the dataframe to only include rows from 'now' back to a specific duration.
-    Also supports semantic window labels (Since Midnight, This Week, This Month).
+    Also supports semantic window labels (Since Midnight, This Week, This Month, This Year).
     """
     if df.empty:
         return df
@@ -86,6 +86,9 @@ def filter_by_recency(df, window_label=None, hours=0, minutes=0, seconds=0,
         elif window_label == "This Month":
             first_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             total_window_seconds = (now - first_of_month).total_seconds()
+        elif window_label == "This Year":
+            first_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            total_window_seconds = (now - first_of_year).total_seconds()
         else:
             total_window_seconds = (hours * 3600) + (minutes * 60) + seconds
     else:
