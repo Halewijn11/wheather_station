@@ -11,6 +11,9 @@ from datetime import datetime
 
 st.title("Status")
 
+gs_url = "https://docs.google.com/spreadsheets/d/1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q/edit?gid=0#gid=0"
+st.write("The raw data of this project can be found back [in this google sheet](%s)." % gs_url)
+
 debug = 0
 cached_time = 0
 time_window_hours = 1

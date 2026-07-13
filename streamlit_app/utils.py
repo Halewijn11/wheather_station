@@ -38,7 +38,7 @@ def get_shared_time_range_selection(label="Select Time Range:"):
     st.session_state[TIME_RANGE_STATE_KEY] = selected
     return selected
 
-def get_google_sheet_df(sheet_id = "1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
+def get_google_sheet_df(sheet_id = "1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
     # Construct the base export URL
     url = f"{base_url}{sheet_id}/export?format=csv"
     
@@ -574,16 +574,24 @@ class TimeSeriesDashboardItem:
                              var_name='Variable', value_name='Value')
         return melted, labels, colors
 
-    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None):
+    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None, min_max_df=None, min_col=None, max_col=None, show_metric=True):
         if df.empty:
             st.warning(f"No data for {self.metric_title}")
             return
 
-        col1, col2 = st.columns([1, 2])
+        if show_metric:
+            col1, col2 = st.columns([1, 2])
+            latest_val = df[self.y_col_main].iloc[-1]
+            with col1:
+                st.metric(self.metric_title, f"{latest_val:{format}} {self.unit}")
 
-        latest_val = df[self.y_col_main].iloc[-1]
-        with col1:
-            st.metric(self.metric_title, f"{latest_val:{format}} {self.unit}")
+                if min_max_df is not None and not min_max_df.empty and min_col and max_col:
+                    min_val = min_max_df[min_col].min()
+                    max_val = min_max_df[max_col].max()
+                    if pd.notna(min_val) and pd.notna(max_val):
+                        st.caption(f"min {min_val:{format}}{self.unit} · max {max_val:{format}}{self.unit}")
+        else:
+            col2 = st.container()
 
         with col2:
             melted_df, labels, colors = self._prepare_data(df, x_col)
@@ -633,7 +641,7 @@ class TimeSeriesDashboardItem:
             if chart_type == 'area':
                 main_mark = base.mark_area(opacity=0.4, point=show_dots)
             elif chart_type == 'scatter':
-                main_mark = base.mark_point(size=40, filled=True)
+                main_mark = base.mark_point(size=18, filled=True)
             else:
                 main_mark = base.mark_line(strokeWidth=2, point=show_dots)
 
@@ -663,7 +671,7 @@ class TimeSeriesDashboardItem:
             ).transform_filter(nearest)
 
             # Points appearing on the line(s)
-            points = base.mark_point(size=60).encode(
+            points = base.mark_point(size=30).encode(
                 opacity=alt.condition(nearest, alt.value(1), alt.value(0))
             )
 
@@ -688,6 +696,268 @@ class TimeSeriesDashboardItem:
             ).interactive()
 
             st.altair_chart(chart, use_container_width=True)
+
+
+import math
+
+def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2,
+                         track_color="#DBEAFE", fill_color="#2563EB",
+                         needle_color="#3d3a2a", muted_color="#898781",
+                         width=320, height=240):
+    """
+    Renders a semi-circular analog gauge (barometer-style) as an SVG string.
+    value is clamped to [min_val, max_val] for the needle/arc; the raw value is
+    still shown as text so an out-of-range reading is visible, not hidden.
+    """
+    if value is None or pd.isna(value):
+        return ""
+
+    clamped = min(max(value, min_val), max_val)
+    frac = (clamped - min_val) / (max_val - min_val)
+
+    scale = width / 320
+    cx, cy, r = width / 2, 150 * scale, 100 * scale
+    stroke_w = 20 * scale
+
+    def point(angle_deg, radius):
+        rad = math.radians(angle_deg)
+        return cx + radius * math.cos(rad), cy - radius * math.sin(rad)
+
+    def arc_path(start_deg, end_deg, radius):
+        x1, y1 = point(start_deg, radius)
+        x2, y2 = point(end_deg, radius)
+        large_arc = 1 if abs(start_deg - end_deg) > 180 else 0
+        return f"M {x1:.2f} {y1:.2f} A {radius:.2f} {radius:.2f} 0 {large_arc} 1 {x2:.2f} {y2:.2f}"
+
+    track_path = arc_path(180, 0, r)
+    value_angle = 180 - frac * 180
+    fill_path = arc_path(180, value_angle, r)
+
+    # Ticks + selective labels (every `label_every`-th tick, to avoid clutter)
+    ticks_svg = []
+    n_ticks = int(round((max_val - min_val) / step)) + 1
+    for i in range(n_ticks):
+        tick_val = min_val + i * step
+        angle = 180 - ((tick_val - min_val) / (max_val - min_val)) * 180
+        x1, y1 = point(angle, r + stroke_w / 2 + 2 * scale)
+        x2, y2 = point(angle, r + stroke_w / 2 + 10 * scale)
+        ticks_svg.append(
+            f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
+            f'stroke="{muted_color}" stroke-width="{1.5 * scale:.2f}"/>'
+        )
+        if i % label_every == 0:
+            lx, ly = point(angle, r + stroke_w / 2 + 22 * scale)
+            ticks_svg.append(
+                f'<text x="{lx:.2f}" y="{ly:.2f}" font-size="{11 * scale:.2f}" fill="{muted_color}" '
+                f'text-anchor="middle" dominant-baseline="middle" '
+                f'font-family="system-ui, sans-serif">{tick_val:g}</text>'
+            )
+
+    # Needle (drawn as a tapered arrow/dart shape rather than a plain line)
+    needle_len = r - 25 * scale
+    nx, ny = point(value_angle, needle_len)
+
+    dx, dy = nx - cx, ny - cy
+    seg_len = math.hypot(dx, dy) or 1.0
+    ux, uy = dx / seg_len, dy / seg_len
+    perp_x, perp_y = -uy, ux
+    needle_half_w = 4 * scale
+    base_lx, base_ly = cx + perp_x * needle_half_w, cy + perp_y * needle_half_w
+    base_rx, base_ry = cx - perp_x * needle_half_w, cy - perp_y * needle_half_w
+
+    return f'''
+<div style="display:flex; justify-content:center;">
+<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}"
+     xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="Gauge, current value {value:.1f} {unit}">
+  <path d="{track_path}" fill="none" stroke="{track_color}" stroke-width="{stroke_w}" stroke-linecap="round"/>
+  <path d="{fill_path}" fill="none" stroke="{fill_color}" stroke-width="{stroke_w}" stroke-linecap="round"/>
+  {''.join(ticks_svg)}
+  <polygon points="{base_lx:.2f},{base_ly:.2f} {nx:.2f},{ny:.2f} {base_rx:.2f},{base_ry:.2f}" fill="{needle_color}"/>
+  <circle cx="{cx}" cy="{cy}" r="{7 * scale:.2f}" fill="{needle_color}"/>
+  <text x="{cx}" y="{cy + 42 * scale}" font-size="{30 * scale:.2f}" font-weight="600" fill="{needle_color}"
+        text-anchor="middle" font-family="system-ui, sans-serif">{value:.1f}</text>
+  <text x="{cx}" y="{cy + 62 * scale}" font-size="{13 * scale:.2f}" fill="{muted_color}"
+        text-anchor="middle" font-family="system-ui, sans-serif">{unit}</text>
+</svg>
+</div>
+'''
+
+
+def render_thermometer(value, min_val=-10, max_val=40, unit="°C", width=70, height=168,
+                        tube_color="#E5E7EB", fill_color="#DC2626", text_color="#3d3a2a"):
+    """
+    Renders a vertical thermometer (bulb + tube) as an SVG string.
+    value is clamped to [min_val, max_val] for the fill level; the raw value is
+    still shown as text so an out-of-range reading is visible, not hidden.
+    """
+    if value is None or pd.isna(value):
+        return ""
+
+    clamped = min(max(value, min_val), max_val)
+    frac = (clamped - min_val) / (max_val - min_val)
+
+    scale = height / 168
+    tube_r = 8 * scale
+    bulb_r = 14 * scale
+    cx = width / 2
+    bulb_cy = height - 34 * scale
+    tube_top_y = 15 * scale
+    tube_bottom_y = bulb_cy - bulb_r * 0.4
+    tube_height = tube_bottom_y - tube_top_y
+    fill_height = tube_height * frac
+    fill_top_y = tube_bottom_y - fill_height
+    text_y = bulb_cy + bulb_r + 14 * scale
+
+    return f'''
+<div style="display:flex; justify-content:center;">
+<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}"
+     xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="Thermometer, current value {value:.1f} {unit}">
+  <rect x="{cx - tube_r:.2f}" y="{tube_top_y:.2f}" width="{2 * tube_r:.2f}" height="{tube_height:.2f}"
+        rx="{tube_r:.2f}" fill="{tube_color}"/>
+  <rect x="{cx - tube_r:.2f}" y="{fill_top_y:.2f}" width="{2 * tube_r:.2f}" height="{fill_height:.2f}"
+        rx="{tube_r:.2f}" fill="{fill_color}"/>
+  <circle cx="{cx:.2f}" cy="{bulb_cy:.2f}" r="{bulb_r:.2f}" fill="{fill_color}"/>
+  <text x="{cx:.2f}" y="{text_y:.2f}" font-size="{13 * scale:.2f}" fill="{text_color}"
+        text-anchor="middle" font-family="system-ui, sans-serif">{value:.1f}{unit}</text>
+</svg>
+</div>
+'''
+
+
+WIND_SPEED_BINS = [0, 5, 10, 15, 20, np.inf]
+# Blue (calm) -> red (strong), ColorBrewer 5-class RdYlBu reversed.
+WIND_ROSE_COLORS = ['#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c']
+
+
+def _speed_bin_labels(speed_bins):
+    labels = []
+    for lo, hi in zip(speed_bins[:-1], speed_bins[1:]):
+        labels.append(f"{lo:.0f}+ km/h" if np.isinf(hi) else f"{lo:.0f}-{hi:.0f} km/h")
+    return labels
+
+
+def render_wind_rose_legend_html(speed_bins=WIND_SPEED_BINS, colors=WIND_ROSE_COLORS):
+    """Standalone color-swatch legend for the wind rose, meant for its own column."""
+    labels = _speed_bin_labels(speed_bins)
+    rows = "".join(
+        f'<div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">'
+        f'<span style="width:14px; height:14px; border-radius:3px; background:{color}; display:inline-block;"></span>'
+        f'<span style="font-size:13px;">{label}</span>'
+        f'</div>'
+        for label, color in zip(labels, colors)
+    )
+    return f'<div style="margin-top:40px;"><b style="font-size:13px;">Wind speed</b><div style="margin-top:8px;">{rows}</div></div>'
+
+
+def build_wind_rose_data(df, direction_col='wind_direction', speed_col='wind_speed_kmh_avg',
+                          n_sectors=16, speed_bins=WIND_SPEED_BINS):
+    """
+    Bins readings into n_sectors compass sectors x speed bands, and returns
+    per (sector, speed band) the reading count plus cumulative counts for
+    stacking - the inputs a stacked wind rose chart needs.
+    """
+    sector_names = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                     'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+    speed_labels = _speed_bin_labels(speed_bins)
+    sector_width = 360 / n_sectors
+
+    grid = pd.MultiIndex.from_product([range(n_sectors), speed_labels], names=['sector_idx', 'speed_bin'])
+    rose = pd.DataFrame(index=grid).reset_index()
+    rose['sector'] = rose['sector_idx'].map(lambda i: sector_names[i])
+    center_deg = rose['sector_idx'] * sector_width
+    rose['theta_start'] = np.deg2rad(center_deg - sector_width / 2)
+    rose['theta_end'] = np.deg2rad(center_deg + sector_width / 2)
+    rose['speed_bin'] = pd.Categorical(rose['speed_bin'], categories=speed_labels, ordered=True)
+
+    data = df[[direction_col, speed_col]].dropna()
+    if not data.empty:
+        sector_idx = (np.round(data[direction_col] / sector_width) % n_sectors).astype(int)
+        speed_bin = pd.cut(data[speed_col], bins=speed_bins, labels=speed_labels, right=False, include_lowest=True)
+        counts = data.assign(sector_idx=sector_idx, speed_bin=speed_bin).groupby(['sector_idx', 'speed_bin'], observed=False).size()
+        rose = rose.set_index(['sector_idx', 'speed_bin'])
+        rose['count'] = counts.reindex(rose.index, fill_value=0).astype(int)
+        rose = rose.reset_index()
+    else:
+        rose['count'] = 0
+
+    rose = rose.sort_values(['sector_idx', 'speed_bin'])
+    rose['cum_count'] = rose.groupby('sector_idx')['count'].cumsum()
+    rose['cum_count_prev'] = rose['cum_count'] - rose['count']
+    return rose.reset_index(drop=True)
+
+
+def render_wind_rose_chart(rose_df, size=300, speed_bins=WIND_SPEED_BINS):
+    """
+    Renders a stacked polar wind-rose chart: wedge angle = compass sector,
+    wedge radius = cumulative reading count (sqrt-scaled so annulus area
+    reflects frequency), color band = wind speed range within that sector.
+    """
+    if rose_df.empty or rose_df['count'].sum() == 0:
+        return None
+
+    speed_labels = _speed_bin_labels(speed_bins)
+    max_total = int(rose_df.groupby('sector_idx')['count'].sum().max())
+    max_radius = size / 2 - 24
+    pos_scale = alt.Scale(domain=[0, size], range=[0, size])
+
+    # Reference rings: 3 evenly spaced count levels, radius uses the same
+    # sqrt mapping as the wedges so the rings line up with the stacked data.
+    ring_levels = sorted({round(max_total * f) for f in (1 / 3, 2 / 3, 1)} - {0})
+    rings_df = pd.DataFrame({'level': ring_levels})
+    rings_df['r'] = rings_df['level'].apply(lambda lvl: max_radius * math.sqrt(lvl / max_total))
+
+    rings = alt.Chart(rings_df).mark_arc(fill='#D1D5DB', opacity=0.5).encode(
+        x=alt.value(size / 2),
+        y=alt.value(size / 2),
+        theta=alt.value(0),
+        theta2=alt.value(2 * math.pi),
+        radius=alt.Radius('r_outer:Q', scale=None),
+        radius2=alt.Radius2('r_inner:Q'),
+    ).transform_calculate(
+        r_outer='datum.r + 1',
+        r_inner='max(datum.r - 1, 0)'
+    )
+
+    ring_angle = math.radians(45)
+    rings_df['label_x'] = size / 2 + rings_df['r'] * math.sin(ring_angle)
+    rings_df['label_y'] = size / 2 - rings_df['r'] * math.cos(ring_angle)
+    ring_labels = alt.Chart(rings_df).mark_text(fontSize=9, color='#898781', dx=4).encode(
+        x=alt.X('label_x:Q', axis=None, scale=pos_scale),
+        y=alt.Y('label_y:Q', axis=None, scale=pos_scale),
+        text='level:Q'
+    )
+
+    wedges = alt.Chart(rose_df).mark_arc(stroke='white', strokeWidth=1, opacity=0.9).encode(
+        x=alt.value(size / 2),
+        y=alt.value(size / 2),
+        theta=alt.Theta('theta_start:Q', scale=None),
+        theta2='theta_end:Q',
+        radius=alt.Radius('cum_count:Q', scale=alt.Scale(type='sqrt', domain=[0, max_total], range=[0, max_radius])),
+        radius2='cum_count_prev:Q',
+        color=alt.Color('speed_bin:O', scale=alt.Scale(domain=speed_labels, range=WIND_ROSE_COLORS), legend=None),
+        tooltip=[
+            alt.Tooltip('sector:N', title='Direction'),
+            alt.Tooltip('speed_bin:O', title='Speed range'),
+            alt.Tooltip('count:Q', title='Readings'),
+        ]
+    )
+
+    label_deg = {'N': 0, 'E': 90, 'S': 180, 'W': 270}
+    label_r = size / 2 - 10
+    labels_df = pd.DataFrame({
+        'label': list(label_deg.keys()),
+        'x': [size / 2 + label_r * math.sin(math.radians(a)) for a in label_deg.values()],
+        'y': [size / 2 - label_r * math.cos(math.radians(a)) for a in label_deg.values()],
+    })
+    labels = alt.Chart(labels_df).mark_text(fontSize=12, fontWeight='bold', color='#898781').encode(
+        x=alt.X('x:Q', axis=None, scale=pos_scale),
+        y=alt.Y('y:Q', axis=None, scale=pos_scale),
+        text='label:N'
+    )
+
+    return alt.layer(rings, wedges, ring_labels, labels).properties(width=size, height=size).configure_view(strokeWidth=0)
 
 
 def transform_to_radial_cartesian(df, time_col, degree_col):

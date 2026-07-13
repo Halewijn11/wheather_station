@@ -11,6 +11,11 @@ dashboard_page = st.Page(
     icon=":material/bar_chart:",
     default=True,
 )
+today_page = st.Page(
+    "pages/today.py",
+    title="Today",
+    icon=":material/today:",
+)
 status_page = st.Page(
     "pages/status.py",
     title="Status",
@@ -22,6 +27,8 @@ info_page = st.Page(
     title="info",
     icon=":material/info:",
 )
+
+
 # project_2_page = st.Page(
 #     "views/chatbot.py",
 #     title="Chat Bot",
@@ -29,7 +36,7 @@ info_page = st.Page(
 # )
 
 # --- NAVIGATION SETUP [WITHOUT SECTIONS] ---
-pg = st.navigation(pages=[dashboard_page, status_page, info_page])
+pg = st.navigation(pages=[dashboard_page, today_page, status_page, info_page])
 
 # --- RUN NAVIGATION ---
 pg.run()
