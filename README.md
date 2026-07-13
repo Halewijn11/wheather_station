@@ -13,7 +13,7 @@ cubecell information page:   https://docs.heltec.org/en/node/asr650x/asr650x_gen
 github repository for many basic arduino projects: https://github.com/Circuit-Digest/Basic-Arduino-Tutorials-for-Beginners-  
 streamlit cloud setup:    https://share.streamlit.io/?utm_source=streamlit&utm_medium=referral&utm_campaign=main&utm_content=-ss-streamlit-io-cloudpagehero   
 link to sensecap lorawan gateway dashboard:  https://sensecap.seeed.cc/portal/#/devices_gateway_details?eui=2CF7F1107340004E&redirect=devices_gateway&tabnum=2&device_network=1&device_gateway_type=100     
-Link to google sheets:  https://docs.google.com/spreadsheets/d/1zPwrfEDDBZVqb3mwbBCHdeCaGAHnUresvGlHDXuD_qI/edit?usp=sharing  
+Link to google sheets:  https://docs.google.com/spreadsheets/d/1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q/edit?gid=0#gid=0  
 The github issue for heltec v3: https://github.com/HelTecAutomation/Heltec_ESP32/issues/147   
 Reference for wheather app: https://meteo-be.net/nl/grafieken/kluizen-evergem/last_24h    
 

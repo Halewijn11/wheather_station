@@ -17,7 +17,7 @@ time_window_filtering_mode = 'last_session'
 
 
 
-st.title("Wheather dashboard")
+st.title("Wheather dashboard...")
 
 
 # #--------------------- general preamble to load data -----------------------------
@@ -52,57 +52,6 @@ date_string = now.strftime("%A, %B %d")
 st.header('Affligem, Belgium')
 
 st.write(date_string)
-
-# #--------------------- sunset and sunrise -----------------------------
-sunrise_str, sunset_str = utils.get_sunrise_sunset()
-# 1. We keep your column structure to limit the width
-icon_width = 6
-text_width = 15
-buffer_width = 20
-
-col1, col2, col3, col4, col5, col6, col7, col8 ,buffer = st.columns([icon_width, text_width,
-                                                         icon_width, text_width,
-                                                         icon_width, text_width,
-                                                        icon_width, text_width,
-                                                         buffer_width])
-
-with col1:
-    img_path = os.path.join(current_dir, "..", "assets", "sunrise.png")
-    st.image(img_path, width=50)
-with col2:
-    # Use <br> instead of \n\n to remove the paragraph gap
-    st.markdown(f"**Sunrise**<br>{sunrise_str}", unsafe_allow_html=True)
-
-with col3:
-    img_path = os.path.join(current_dir, "..", "assets", "sunset.png")
-    st.image(img_path, width=50)
-with col4:
-    # Applying the same fix here
-    st.markdown(f"**Sunset**<br>{sunset_str}", unsafe_allow_html=True)
-
-# --- Moon Phase ---
-with col5:
-    # moon_icon_path comes directly from your utils function
-    moonphase_image_filepath, index = utils.get_moonphase_filepath(image_repo= asset_path)
-    # st.write(f"DEBUG: Looking for image at: {moonphase_image_filepath}")
-    st.image(moonphase_image_filepath, width=50)
-with col6:
-    st.markdown(f"**Moon**<br> {index}/8", unsafe_allow_html=True)
-
-# --- Moon Phase ---
-with col7:
-    # moon_icon_path comes directly from your utils function
-    img_path = os.path.join(asset_path, 'solar_noon.png')
-    sunrise_str, sunset_str = utils.get_sunrise_sunset()
-    solar_noon_str = utils.get_solar_noon()
-    # st.write(f"DEBUG: Looking for image at: {moonphase_image_filepath}")
-    st.image(img_path, width=50)
-with col8:
-    st.markdown(f"**Solar noon**<br> {solar_noon_str}", unsafe_allow_html=True)
-
-with buffer:
-    pass
-
 
 # #--------------------- button for time window -----------------------------
 
@@ -162,7 +111,8 @@ utils.TimeSeriesDashboardItem(
     col_name="sht_temperature_min",
     label="min",
     color="#1D4ED8"
-).plot(time_window_df, prediction_df=forecast_df, prediction_col='temp')
+).plot(time_window_df, prediction_df=forecast_df, prediction_col='temp',
+       min_max_df=filtered_df, min_col='sht_temperature_avg', max_col='sht_temperature_avg')
 
 # #--------------------- humidity -----------------------------
 utils.TimeSeriesDashboardItem(
@@ -189,20 +139,29 @@ if not time_window_df.empty:
     if "bmp_pressure_max" in time_window_df.columns:
         time_window_df["bmp_pressure_max"] = time_window_df["bmp_pressure_max"] / 100
 
-utils.TimeSeriesDashboardItem(
-    metric_title="Pressure", 
-    unit="hPa", 
-    y_col_main="bmp_pressure_avg", 
-    main_color="#2563EB" # Blue
-).add_extra_series(
-    col_name="bmp_pressure_max",
-    label="max",
-    color="#1D4ED8"
-).add_extra_series(
-    col_name="bmp_pressure_min",
-    label="min",
-    color="#93C5FD"
-).plot(time_window_df, format=".0f", prediction_df=forecast_df, prediction_col='pressure')
+    latest_pressure = time_window_df["bmp_pressure_avg"].iloc[-1]
+
+    gauge_col, chart_col = st.columns([1, 2])
+    with gauge_col:
+        st.markdown(
+            utils.render_analog_gauge(latest_pressure, min_val=973, max_val=1053, unit="hPa", width=224, height=168),
+            unsafe_allow_html=True
+        )
+    with chart_col:
+        utils.TimeSeriesDashboardItem(
+            metric_title="Pressure",
+            unit="hPa",
+            y_col_main="bmp_pressure_avg",
+            main_color="#2563EB" # Blue
+        ).add_extra_series(
+            col_name="bmp_pressure_max",
+            label="max",
+            color="#1D4ED8"
+        ).add_extra_series(
+            col_name="bmp_pressure_min",
+            label="min",
+            color="#93C5FD"
+        ).plot(time_window_df, format=".1f", prediction_df=forecast_df, prediction_col='pressure', show_metric=False)
 
  # #--------------------- light intensity -----------------------------
 utils.TimeSeriesDashboardItem(
