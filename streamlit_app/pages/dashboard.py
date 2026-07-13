@@ -23,7 +23,7 @@ st_autorefresh(interval=60_000, key="dashboard_autorefresh")
 
 
 
-st.title("Wheather dashboard...")
+st.title("Wheather dashboard")
 
 
 # #--------------------- general preamble to load data -----------------------------
@@ -103,27 +103,32 @@ time_window_df = utils.resample_data(
 
 
 # #--------------------- temperature -----------------------------
+st.subheader("Temperature")
+temp_24h_ago_val, _ = utils.value_at_offset(df, "sht_temperature_avg", 24 * 3600)
+
 utils.TimeSeriesDashboardItem(
-    metric_title="Temperature", 
-    unit="°C", 
-    y_col_main="sht_temperature_avg", 
+    metric_title="Current",
+    unit="°C",
+    y_col_main="sht_temperature_avg",
     y_col_main_label="average",
     main_color="#2563EB" # Reddish
 ).add_extra_series(
-    col_name="sht_temperature_max", 
-    label="max", 
+    col_name="sht_temperature_max",
+    label="max",
     color="#93C5FD" # Salmon
 ).add_extra_series(
     col_name="sht_temperature_min",
     label="min",
     color="#1D4ED8"
 ).plot(time_window_df, prediction_df=forecast_df, prediction_col='temp',
-       min_max_df=filtered_df, min_col='sht_temperature_avg', max_col='sht_temperature_avg')
+       min_max_df=filtered_df, min_col='sht_temperature_avg', max_col='sht_temperature_avg',
+       compare_val=temp_24h_ago_val, compare_label="24h ago")
 
 # #--------------------- humidity -----------------------------
+st.subheader("Humidity")
 utils.TimeSeriesDashboardItem(
-    metric_title="Humidity", 
-    unit="%", 
+    metric_title="Current",
+    unit="%",
     y_col_main="sht_humidity_avg", 
     y_col_main_label="average",
     main_color="#2563EB" # Blue
@@ -138,6 +143,7 @@ utils.TimeSeriesDashboardItem(
 ).plot(time_window_df, format=".0f", prediction_df=forecast_df, prediction_col='humidity')
 
  # #--------------------- pressure -----------------------------
+st.subheader("Pressure")
 if not time_window_df.empty:
     time_window_df["bmp_pressure_avg"] = time_window_df["bmp_pressure_avg"] / 100
     if "bmp_pressure_min" in time_window_df.columns:
@@ -155,7 +161,7 @@ if not time_window_df.empty:
         )
     with chart_col:
         utils.TimeSeriesDashboardItem(
-            metric_title="Pressure",
+            metric_title="Current",
             unit="hPa",
             y_col_main="bmp_pressure_avg",
             main_color="#2563EB" # Blue
@@ -170,9 +176,10 @@ if not time_window_df.empty:
         ).plot(time_window_df, format=".1f", prediction_df=forecast_df, prediction_col='pressure', show_metric=False)
 
  # #--------------------- light intensity -----------------------------
+st.subheader("Light intensity")
 utils.TimeSeriesDashboardItem(
-    metric_title="Light intensity", 
-    unit="W/m²", 
+    metric_title="Current",
+    unit="W/m²",
     y_col_main="light_intensity_avg", 
     main_color="#2563EB" # Gold
 ).add_extra_series(
@@ -186,8 +193,9 @@ utils.TimeSeriesDashboardItem(
 ).plot(time_window_df)
 
  # #--------------------- wind speed -----------------------------
+st.subheader("Wind speed")
 utils.TimeSeriesDashboardItem(
-    metric_title="Wind speed",
+    metric_title="Current",
     unit="km/h",
     y_col_main="wind_speed_kmh_avg",
     y_col_main_label="average",
@@ -199,8 +207,9 @@ utils.TimeSeriesDashboardItem(
 ).plot(time_window_df, format=".0f")
 
  # #--------------------- wind direction -----------------------------
+st.subheader("Wind direction")
 utils.TimeSeriesDashboardItem(
-    metric_title="Wind direction",
+    metric_title="Current",
     unit="°",
     y_col_main="wind_direction",
     main_color="#1E90FF"
@@ -217,16 +226,18 @@ utils.TimeSeriesDashboardItem(
  # #--------------------- wind speed forecast -----------------------------
 # The sensor records wind pulses (not m/s), so forecast wind speed is shown separately.
 if show_forecast and not forecast_df.empty:
+    st.subheader("Wind speed (forecast)")
     utils.TimeSeriesDashboardItem(
-        metric_title="Wind speed (forecast)",
+        metric_title="Current",
         unit="m/s",
         y_col_main="wind_speed",
         main_color="#F97316"
     ).plot(forecast_df)
 
  # #--------------------- rain pulses -----------------------------
+st.subheader("Rain")
 utils.TimeSeriesDashboardItem(
-    metric_title="Rain",
+    metric_title="Current",
     unit="mm",
     y_col_main="rain_mm",
     y_col_main_label="rain (mm)",
