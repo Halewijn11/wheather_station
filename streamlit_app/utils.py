@@ -151,10 +151,10 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, volt
     axis=1
     )
 
-    # Sensor noise shows up as tiny non-zero readings at night; treat anything below 0.5 as 0.
+    # Sensor noise shows up as tiny non-zero readings at night; treat anything below 1 as 0.
     for col in ('light_intensity_avg', 'light_intensity_max', 'light_intensity_min'):
         if col in df.columns:
-            df.loc[df[col] < 0.5, col] = 0
+            df.loc[df[col] < 1, col] = 0
 
     return df
 
