@@ -64,7 +64,7 @@ selected_label = utils.get_shared_time_range_selection("Select Time Range:")
 filtered_df = utils.filter_by_recency(df, window_label=selected_label, mode=time_window_filtering_mode)
 
 # 3. Apply the resolution defined in our config
-time_window_df = utils.resample_data(filtered_df, selected_label)
+time_window_df = utils.resample_data(filtered_df)
 time_window_df.to_csv('time_window_data.csv', index=False)
 # time_window_df.to_excel('time_window_data.xlsx', index=False)   
 

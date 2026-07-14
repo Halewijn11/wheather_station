@@ -95,8 +95,7 @@ filtered_df = utils.filter_by_recency(df, window_label=selected_label, mode=time
 
 # 3. Apply the resolution defined in our config
 time_window_df = utils.resample_data(
-    filtered_df, 
-    selected_label, 
+    filtered_df,
     sum_cols=['rain_mm', 'wind_pulses_total'],
     cumulative_cols=['rain_mm']
 )
@@ -106,41 +105,47 @@ time_window_df = utils.resample_data(
 st.subheader("Temperature")
 temp_24h_ago_val, _ = utils.value_at_offset(df, "sht_temperature_avg", 24 * 3600)
 
-utils.TimeSeriesDashboardItem(
+# Read toggle state up front to decide which series to add; the checkboxes
+# themselves are declared later, via extra_controls, inside the chart's
+# second column (above the chart).
+show_temp_max = st.session_state.get("temp_show_max", True)
+show_temp_min = st.session_state.get("temp_show_min", True)
+
+temp_chart = utils.TimeSeriesDashboardItem(
     metric_title="Current",
     unit="°C",
     y_col_main="sht_temperature_avg",
     y_col_main_label="average",
     main_color="#2563EB" # Reddish
-).add_extra_series(
-    col_name="sht_temperature_max",
-    label="max",
-    color="#93C5FD" # Salmon
-).add_extra_series(
-    col_name="sht_temperature_min",
-    label="min",
-    color="#1D4ED8"
-).plot(time_window_df, prediction_df=forecast_df, prediction_col='temp',
-       min_max_df=filtered_df, min_col='sht_temperature_avg', max_col='sht_temperature_avg',
-       compare_val=temp_24h_ago_val, compare_label="24h ago")
+)
+if show_temp_max:
+    temp_chart.add_extra_series(col_name="sht_temperature_max", label="max", color="#16A34A")
+if show_temp_min:
+    temp_chart.add_extra_series(col_name="sht_temperature_min", label="min", color="#DC2626")
+
+def _render_temp_toggles():
+    temp_toggle_max, temp_toggle_min = st.columns(2)
+    with temp_toggle_max:
+        st.checkbox("Max", value=show_temp_max, key="temp_show_max")
+    with temp_toggle_min:
+        st.checkbox("Min", value=show_temp_min, key="temp_show_min")
+
+temp_chart.plot(time_window_df, prediction_df=forecast_df, prediction_col='temp',
+                 min_max_df=filtered_df, min_col='sht_temperature_avg', max_col='sht_temperature_avg',
+                 compare_val=temp_24h_ago_val, compare_label="24h ago",
+                 extra_controls=_render_temp_toggles, max_line_label="max avg",
+                 show_min_line=True, min_line_label="min avg")
 
 # #--------------------- humidity -----------------------------
 st.subheader("Humidity")
 utils.TimeSeriesDashboardItem(
     metric_title="Current",
     unit="%",
-    y_col_main="sht_humidity_avg", 
+    y_col_main="sht_humidity_avg",
     y_col_main_label="average",
     main_color="#2563EB" # Blue
-).add_extra_series(
-    col_name="sht_humidity_max",
-    label="max",
-    color="#93C5FD"
-).add_extra_series(
-    col_name="sht_humidity_min",
-    label="min",
-    color="#1D4ED8"
-).plot(time_window_df, format=".0f", prediction_df=forecast_df, prediction_col='humidity')
+).plot(time_window_df, format=".0f", prediction_df=forecast_df, prediction_col='humidity', max_line_label="max avg",
+       show_min_line=True, min_line_label="min avg")
 
  # #--------------------- pressure -----------------------------
 st.subheader("Pressure")
@@ -151,46 +156,133 @@ if not time_window_df.empty:
     if "bmp_pressure_max" in time_window_df.columns:
         time_window_df["bmp_pressure_max"] = time_window_df["bmp_pressure_max"] / 100
 
-    latest_pressure = time_window_df["bmp_pressure_avg"].iloc[-1]
-
-    gauge_col, chart_col = st.columns([1, 2])
-    with gauge_col:
-        st.markdown(
-            utils.render_analog_gauge(latest_pressure, min_val=973, max_val=1053, unit="hPa", width=224, height=168),
-            unsafe_allow_html=True
-        )
-    with chart_col:
-        utils.TimeSeriesDashboardItem(
-            metric_title="Current",
-            unit="hPa",
-            y_col_main="bmp_pressure_avg",
-            main_color="#2563EB" # Blue
-        ).add_extra_series(
-            col_name="bmp_pressure_max",
-            label="max",
-            color="#1D4ED8"
-        ).add_extra_series(
-            col_name="bmp_pressure_min",
-            label="min",
-            color="#93C5FD"
-        ).plot(time_window_df, format=".1f", prediction_df=forecast_df, prediction_col='pressure', show_metric=False)
+    utils.TimeSeriesDashboardItem(
+        metric_title="Current",
+        unit="hPa",
+        y_col_main="bmp_pressure_avg",
+        main_color="#2563EB" # Blue
+    ).plot(time_window_df, format=".1f", prediction_df=forecast_df, prediction_col='pressure', max_line_label="max avg",
+           show_min_line=True, min_line_label="min avg")
 
  # #--------------------- light intensity -----------------------------
 st.subheader("Light intensity")
-utils.TimeSeriesDashboardItem(
-    metric_title="Current",
-    unit="W/m²",
-    y_col_main="light_intensity_avg", 
-    main_color="#2563EB" # Gold
-).add_extra_series(
-    col_name="light_intensity_max",
-    label="max",
-    color="#93C5FD"
-).add_extra_series(
-    col_name="light_intensity_min",
-    label="min",
-    color="#1D4ED8"
-).plot(time_window_df)
+if time_window_df.empty:
+    st.warning("No data for Light intensity")
+else:
+    light_avg_col = "light_intensity_avg"
+    light_max_col = "light_intensity_max"
+    light_avg_color = "#2563EB"
+    light_max_color = "#F59E0B"  # Amber area for max
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        latest_light_val = time_window_df[light_avg_col].iloc[-1]
+        st.metric("Current", f"{latest_light_val:.1f} W/m²")
+
+    with col2:
+        light_melted = time_window_df[["received_at", light_avg_col, light_max_col]].rename(
+            columns={light_avg_col: "average", light_max_col: "max"}
+        ).melt(id_vars=["received_at"], value_vars=["average", "max"],
+               var_name="Variable", value_name="Value")
+
+        y_min = float(light_melted["Value"].min())
+        y_max = float(light_melted["Value"].max())
+        padding = (y_max - y_min) * 0.1 if y_max != y_min else 1
+        y_domain = [y_min - padding, y_max + padding]
+
+        color_scale = alt.Scale(domain=["average", "max"], range=[light_avg_color, light_max_color])
+
+        base = alt.Chart(light_melted).encode(
+            x=alt.X("received_at:T", title=None, axis=alt.Axis(labelExpr=utils.DATE_AT_MIDNIGHT_LABEL_EXPR)),
+            y=alt.Y("Value:Q", title="W/m²", scale=alt.Scale(domain=y_domain, clamp=True)),
+            color=alt.Color("Variable:N", scale=color_scale, title=None,
+                             legend=alt.Legend(orient="bottom"))
+        )
+
+        max_area = base.transform_filter(alt.datum.Variable == "max").mark_area(opacity=0.4)
+        avg_line = base.transform_filter(alt.datum.Variable == "average").mark_line(strokeWidth=1)
+
+        nearest = alt.selection_point(on='mouseover', nearest=True, fields=["received_at"],
+                                      encodings=['x'], empty=False)
+
+        selectors = alt.Chart(time_window_df).mark_rule().encode(
+            x="received_at:T",
+            opacity=alt.value(0),
+            tooltip=[
+                alt.Tooltip("received_at:T", title="Time", format='%d %b %H:%M'),
+                alt.Tooltip(f"{light_avg_col}:Q", title="average", format='.2f'),
+                alt.Tooltip(f"{light_max_col}:Q", title="max", format='.2f'),
+            ]
+        ).add_params(nearest)
+
+        rules = alt.Chart(light_melted).mark_rule(color='#A1A6B4', strokeDash=[4, 4]).encode(
+            x="received_at:T",
+        ).transform_filter(nearest)
+
+        points = base.mark_point(size=30).encode(
+            opacity=alt.condition(nearest, alt.value(1), alt.value(0))
+        )
+
+        day_lines = utils.day_boundary_chart(utils.get_day_boundaries(time_window_df["received_at"]))
+
+        # Full-width horizontal reference line through the average line's peak,
+        # labeled with the max value just above it.
+        light_avg_max = time_window_df[light_avg_col].max()
+        light_max_line = None
+        light_max_label = None
+        if pd.notna(light_avg_max):
+            light_max_line = alt.Chart(pd.DataFrame({'y': [light_avg_max]})).mark_rule(
+                color='#EF4444', strokeDash=[4, 4], strokeWidth=1, opacity=0.6
+            ).encode(y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)))
+
+            light_max_label_df = pd.DataFrame({
+                "received_at": [time_window_df["received_at"].min()],
+                'y': [light_avg_max],
+                'label': [f"max avg {light_avg_max:.1f} W/m²"],
+            })
+            light_max_label = alt.Chart(light_max_label_df).mark_text(
+                align='left', baseline='bottom', dy=-2, color='#EF4444', fontSize=11
+            ).encode(
+                x=alt.X("received_at:T"),
+                y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)),
+                text='label:N'
+            )
+
+        # Full-width horizontal reference line through the average line's trough,
+        # labeled with the min value just below it.
+        light_avg_min = time_window_df[light_avg_col].min()
+        light_min_line = None
+        light_min_label = None
+        if pd.notna(light_avg_min):
+            light_min_line = alt.Chart(pd.DataFrame({'y': [light_avg_min]})).mark_rule(
+                color='#3B82F6', strokeDash=[4, 4], strokeWidth=1, opacity=0.6
+            ).encode(y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)))
+
+            light_min_label_df = pd.DataFrame({
+                "received_at": [time_window_df["received_at"].min()],
+                'y': [light_avg_min],
+                'label': [f"min avg {light_avg_min:.1f} W/m²"],
+            })
+            light_min_label = alt.Chart(light_min_label_df).mark_text(
+                align='left', baseline='top', dy=2, color='#3B82F6', fontSize=11
+            ).encode(
+                x=alt.X("received_at:T"),
+                y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)),
+                text='label:N'
+            )
+
+        light_layers = (
+            ([day_lines] if day_lines is not None else [])
+            + ([light_max_line, light_max_label] if light_max_line is not None else [])
+            + ([light_min_line, light_min_label] if light_min_line is not None else [])
+            + [max_area, avg_line, selectors, rules, points]
+        )
+
+        light_chart = alt.layer(*light_layers).properties(
+            width='container', height=280
+        ).interactive()
+
+        st.altair_chart(light_chart, use_container_width=True)
 
  # #--------------------- wind speed -----------------------------
 st.subheader("Wind speed")
@@ -204,7 +296,7 @@ utils.TimeSeriesDashboardItem(
     col_name="wind_speed_kmh_max",
     label="max",
     color="#93C5FD"
-).plot(time_window_df, format=".0f")
+).plot(time_window_df, format=".0f", max_line_col="wind_speed_kmh_max")
 
  # #--------------------- wind direction -----------------------------
 st.subheader("Wind direction")
@@ -220,7 +312,8 @@ utils.TimeSeriesDashboardItem(
     format=".0f",
     prediction_df=forecast_df,
     prediction_col='wind_deg',
-    y_tick_labels={0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW', 360: 'N'}
+    y_tick_labels={0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW', 360: 'N'},
+    show_max_line=False
 )
 
  # #--------------------- wind speed forecast -----------------------------
@@ -290,3 +383,14 @@ utils.TimeSeriesDashboardItem(
 #     ]
 #     ).properties(height=100)
 #     st.altair_chart(spark, use_container_width=True)
+
+st.markdown(
+    """
+    <style>
+    [data-testid="stMetricValue"] {
+        font-size: 24px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
