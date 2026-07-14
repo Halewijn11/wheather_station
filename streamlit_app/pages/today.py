@@ -122,10 +122,10 @@ pressure_stats = stat_with_time(filtered_df, "bmp_pressure_avg")
 for key in ("current", "min_val", "max_val"):
     pressure_stats[key] = pressure_stats[key] / 100  # Pa -> hPa
 
-gauge_col, p_col1, p_col2, p_col3 = st.columns([1.2, 1, 1, 1])
+gauge_col, p_col1, p_col2, p_col3 = st.columns([1.8, 1, 1, 1])
 with gauge_col:
     st.markdown(
-        utils.render_analog_gauge(pressure_stats['current'], min_val=973, max_val=1053, unit="hPa", width=224, height=168),
+        utils.render_analog_gauge(pressure_stats['current'], min_val=973, max_val=1053, unit="hPa", width=378, height=283),
         unsafe_allow_html=True
     )
 with p_col1:
