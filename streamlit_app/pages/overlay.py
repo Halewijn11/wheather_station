@@ -25,18 +25,24 @@ ALL_SERIES = [
     {'col': 'sht_humidity_avg', 'label': 'Vochtigheid', 'unit': '%', 'format': '.0f'},
     {'col': 'bmp_pressure_avg', 'label': 'Druk', 'unit': 'hPa', 'format': '.1f'},
     {'col': 'light_intensity_avg', 'label': 'Licht', 'unit': 'W/m²', 'format': '.1f'},
-    {'col': 'wind_speed_kmh_avg', 'label': 'Windsnelheid', 'unit': 'km/h', 'format': '.0f'},
+    {'col': 'wind_speed_kmh_avg', 'label': 'Windsnelheid (avg)', 'unit': 'km/h', 'format': '.0f'},
     {'col': 'rain_mm', 'label': 'Regen', 'unit': 'mm', 'format': '.1f'},
+    {'col': 'wind_speed_kmh_max', 'label': 'Windsnelheid (max)', 'unit': 'km/h', 'format': '.0f'},
 ]
 for s in ALL_SERIES:
     s['color'] = utils.OVERLAY_SERIES_COLORS[s['col']]
 
-toggle_cols = st.columns(len(ALL_SERIES))
+row_size = 4
+rows = [ALL_SERIES[i:i + row_size] for i in range(0, len(ALL_SERIES), row_size)]
+
 enabled_series = []
-for col, s in zip(toggle_cols, ALL_SERIES):
-    with col:
-        if st.checkbox(s['label'], value=True, key=f"overlay_toggle_{s['col']}"):
-            enabled_series.append(s)
+for row in rows:
+    toggle_cols = st.columns(row_size)
+    for col, s in zip(toggle_cols, row):
+        with col:
+            default_on = s['col'] == 'sht_temperature_avg'
+            if st.checkbox(s['label'], value=default_on, key=f"overlay_toggle_{s['col']}"):
+                enabled_series.append(s)
 
 if time_window_df.empty:
     st.warning("No data for the selected time range")

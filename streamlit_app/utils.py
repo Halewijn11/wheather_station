@@ -927,6 +927,7 @@ OVERLAY_SERIES_COLORS = {
     'light_intensity_avg': '#008300',
     'wind_speed_kmh_avg': '#4a3aa7',
     'rain_mm': '#e34948',
+    'wind_speed_kmh_max': '#e87ba4',
 }
 
 
