@@ -11,6 +11,7 @@ import os
 import pytz
 from pandas.tseries.frequencies import to_offset
 
+CUSTOM_RANGE_LABEL = "Custom Range"
 TIME_OPTIONS = [
     "Last Hour",
     "Last 24 Hours",
@@ -18,9 +19,24 @@ TIME_OPTIONS = [
     "Since Midnight",
     "This Week",
     "This Month",
+    CUSTOM_RANGE_LABEL,
 ]
 DEFAULT_TIME_RANGE = "Since Midnight"
 TIME_RANGE_STATE_KEY = "selected_time_range"
+
+# Views short enough that the axis date is just clutter (single day, or a
+# rolling 24h window rarely worth calling out a day change for).
+NO_DATE_AXIS_LABELS = {"Since Midnight", "Last 24 Hours"}
+
+
+def axis_date_format(window_label):
+    return '%H:%M' if window_label in NO_DATE_AXIS_LABELS else '%d %b %H:%M'
+
+# Shared (cross-page) storage for the custom range picker: Europe/Brussels-local,
+# tz-aware datetimes. CUSTOM_RANGE_VALID_KEY records whether From < To.
+CUSTOM_RANGE_FROM_KEY = "custom_range_from_dt"
+CUSTOM_RANGE_TO_KEY = "custom_range_to_dt"
+CUSTOM_RANGE_VALID_KEY = "custom_range_valid"
 
 
 def get_shared_time_range_selection(label="Select Time Range:"):
@@ -36,7 +52,49 @@ def get_shared_time_range_selection(label="Select Time Range:"):
     )
 
     st.session_state[TIME_RANGE_STATE_KEY] = selected
+
+    if selected == CUSTOM_RANGE_LABEL:
+        _render_custom_range_pickers()
+
     return selected
+
+
+def _render_custom_range_pickers():
+    """Renders the From/To date+time pickers for Custom Range and stores the
+    resulting Europe/Brussels-local datetimes in session state, shared across
+    pages the same way the selected label itself is shared."""
+    tz = pytz.timezone('Europe/Brussels')
+    now_local = datetime.now(tz)
+    today_local = now_local.date()
+
+    if CUSTOM_RANGE_FROM_KEY not in st.session_state:
+        st.session_state[CUSTOM_RANGE_FROM_KEY] = now_local - timedelta(hours=24)
+    if CUSTOM_RANGE_TO_KEY not in st.session_state:
+        st.session_state[CUSTOM_RANGE_TO_KEY] = now_local
+
+    default_from = st.session_state[CUSTOM_RANGE_FROM_KEY]
+    default_to = st.session_state[CUSTOM_RANGE_TO_KEY]
+
+    from_col, to_col = st.columns(2)
+    with from_col:
+        from_date = st.date_input("From date", value=default_from.date(), max_value=today_local)
+        from_time = st.time_input("From time", value=default_from.time())
+    with to_col:
+        to_date = st.date_input("To date", value=default_to.date(), max_value=today_local)
+        to_time = st.time_input("To time", value=default_to.time())
+
+    from_dt_local = tz.localize(datetime.combine(from_date, from_time))
+    to_dt_local = tz.localize(datetime.combine(to_date, to_time))
+
+    st.session_state[CUSTOM_RANGE_FROM_KEY] = from_dt_local
+    st.session_state[CUSTOM_RANGE_TO_KEY] = to_dt_local
+
+    if from_dt_local >= to_dt_local:
+        st.session_state[CUSTOM_RANGE_VALID_KEY] = False
+        st.warning("'From' must be before 'To'.")
+        st.stop()
+
+    st.session_state[CUSTOM_RANGE_VALID_KEY] = True
 
 def get_google_sheet_df(sheet_id = "1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q", sheet_gid=None, base_url="https://docs.google.com/spreadsheets/d/"):
     # Construct the base export URL
@@ -66,7 +124,17 @@ def filter_by_recency(df, window_label=None, hours=0, minutes=0, seconds=0,
 
     tz = pytz.timezone('Europe/Brussels')
     now = datetime.now(tz)
-    
+
+    # 0. Custom Range: filter directly on absolute received_at bounds,
+    # bypassing the seconds_since_now / mode logic entirely.
+    if window_label == CUSTOM_RANGE_LABEL:
+        if not st.session_state.get(CUSTOM_RANGE_VALID_KEY, False):
+            return df.iloc[0:0]
+        start_utc = pd.Timestamp(st.session_state[CUSTOM_RANGE_FROM_KEY]).tz_convert('UTC')
+        end_utc = pd.Timestamp(st.session_state[CUSTOM_RANGE_TO_KEY]).tz_convert('UTC')
+        mask = (df['received_at'] >= start_utc) & (df['received_at'] <= end_utc)
+        return df.loc[mask].copy()
+
     # 1. Handle semantic window labels
     if window_label:
         if window_label == "Last Hour":
@@ -180,14 +248,18 @@ def get_forecast_df():
     df = df.sort_values('received_at').reset_index(drop=True)
     return df
 
-def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
+def resample_data(df, sum_cols=None, cumulative_cols=None):
     # Ensure the index is datetime for resampling
     df = df.copy()
     df.set_index('received_at', inplace=True)
-    
-    # Raw data processing for "Last Hour"
-    if window_label == "Last Hour":
-        # Calculate cumulative values on raw data before returning
+
+    # Resolution decision is based purely on the actual span of the data
+    # passed in, not on which window label produced it.
+    span = df.index.max() - df.index.min() if not df.empty else pd.Timedelta(0)
+
+    # Raw data below 48h: the sensor already reports on a ~5min cadence, so
+    # resampling a short window adds cost without adding legibility.
+    if span <= pd.Timedelta(hours=48):
         if cumulative_cols:
             for col in cumulative_cols:
                 if col in df.columns:
@@ -195,15 +267,13 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
                     df[target_colname] = df[col].fillna(0).groupby(df.index.tz_convert('Europe/Brussels').date).cumsum()
         return df.reset_index()
 
-    # Define resolution based on selection
-    if window_label in ["Last 24 Hours", "Since Midnight"]:
-        resample_rate = '5min'
-    elif window_label in ["This Week", "Last 7 Days"]:
+    # Define resolution based on the data span, coarsening as the range grows.
+    if span <= pd.Timedelta(days=7):
+        resample_rate = '30min'
+    elif span <= pd.Timedelta(days=30):
         resample_rate = '1h'
-    elif window_label == "This Month":
-        resample_rate = '3h' # Larger window, larger step
     else:
-        resample_rate = '1h'
+        resample_rate = '3h'
 
     # Validate frequency to catch invalid aliases early.
     to_offset(resample_rate)
@@ -230,6 +300,12 @@ def resample_data(df, window_label, sum_cols=None, cumulative_cols=None):
                 target_colname = f"{col}_cumulated"
                 # Group by date so the cumsum resets to 0 at midnight each day
                 resampled_df[target_colname] = resampled_df[col].fillna(0).groupby(resampled_df.index.tz_convert('Europe/Brussels').date).cumsum()
+
+    # Averaging already-clamped raw readings can produce small non-zero values
+    # again (e.g. a 5min bucket mixing 0s with values just above 1); reapply the clamp.
+    for col in ('light_intensity_avg', 'light_intensity_max', 'light_intensity_min'):
+        if col in resampled_df.columns:
+            resampled_df.loc[resampled_df[col] < 1, col] = 0
 
     return resampled_df.reset_index()
 
@@ -550,6 +626,51 @@ def plot_data_altair_hover(df, y_variable_colname, x_variable_colname='received_
     return st.altair_chart(layered_chart, use_container_width=True)
 
 
+def get_day_boundaries(timestamps, x_col='received_at'):
+    """Returns a one-column DataFrame of UTC timestamps marking each Europe/Brussels
+    local midnight strictly inside the span of `timestamps` (a UTC-aware Series).
+    Empty if the span doesn't cross a local midnight, so callers can skip drawing
+    day-separator lines entirely for single-day ranges."""
+    timestamps = timestamps.dropna()
+    if timestamps.empty:
+        return pd.DataFrame({x_col: []})
+
+    tz = pytz.timezone('Europe/Brussels')
+    ts_min, ts_max = timestamps.min(), timestamps.max()
+    local_min, local_max = ts_min.tz_convert(tz), ts_max.tz_convert(tz)
+
+    if local_min.date() == local_max.date():
+        return pd.DataFrame({x_col: []})
+
+    boundaries = []
+    day = local_min.date() + timedelta(days=1)
+    while day <= local_max.date():
+        midnight_utc = tz.localize(datetime.combine(day, datetime.min.time())).astimezone(pytz.UTC)
+        if ts_min < midnight_utc < ts_max:
+            boundaries.append(midnight_utc)
+        day += timedelta(days=1)
+
+    return pd.DataFrame({x_col: pd.to_datetime(boundaries, utc=True)})
+
+
+# Show only the date (no time) on ticks that land on local midnight; every
+# other tick shows just the time. Keeps multi-day axes readable without
+# cluttering single-day axes with a repeated date.
+DATE_AT_MIDNIGHT_LABEL_EXPR = (
+    "(hours(datum.value) == 0 && minutes(datum.value) == 0) "
+    "? timeFormat(datum.value, '%d %b') : timeFormat(datum.value, '%H:%M')"
+)
+
+
+def day_boundary_chart(day_boundaries_df, x_col='received_at'):
+    """Builds the dashed grey vertical rule layer for day boundaries, or None if empty."""
+    if day_boundaries_df.empty:
+        return None
+    return alt.Chart(day_boundaries_df).mark_rule(
+        color='#D1D5DB', strokeDash=[2, 2], opacity=0.7, strokeWidth=3.5
+    ).encode(x=alt.X(f"{x_col}:T"))
+
+
 class TimeSeriesDashboardItem:
     """
     Represent a metric card with an associated time-series plot.
@@ -591,7 +712,7 @@ class TimeSeriesDashboardItem:
                              var_name='Variable', value_name='Value')
         return melted, labels, colors
 
-    def plot(self, df, x_col='received_at', height=200, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None, min_max_df=None, min_col=None, max_col=None, show_metric=True, compare_val=None, compare_label=None):
+    def plot(self, df, x_col='received_at', height=280, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None, min_max_df=None, min_col=None, max_col=None, show_metric=True, compare_val=None, compare_label=None, window_label=None, extra_controls=None, show_max_line=True, max_line_col=None, max_line_label="max", show_min_line=False, min_line_col=None, min_line_label="min"):
         if df.empty:
             st.warning(f"No data for {self.metric_title}")
             return
@@ -621,6 +742,9 @@ class TimeSeriesDashboardItem:
             col2 = st.container()
 
         with col2:
+            if extra_controls is not None:
+                extra_controls()
+
             melted_df, labels, colors = self._prepare_data(df, x_col)
 
             # 1. Base Encoding
@@ -652,7 +776,7 @@ class TimeSeriesDashboardItem:
                                    scale=alt.Scale(domain=y_domain, clamp=True))
 
             base = alt.Chart(melted_df).encode(
-                x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(format='%H:%M')),
+                x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(labelExpr=DATE_AT_MIDNIGHT_LABEL_EXPR)),
                 y=y_encoding,
                 color=alt.Color("Variable:N", 
                                 scale=color_scale,
@@ -702,13 +826,82 @@ class TimeSeriesDashboardItem:
                 opacity=alt.condition(nearest, alt.value(1), alt.value(0))
             )
 
-            layers = [main_mark, selectors, rules, points]
+            day_lines = day_boundary_chart(get_day_boundaries(df[x_col]), x_col)
+
+            # Full-width horizontal reference line through the main series' peak,
+            # labeled with the max value just above it. Sourced from min_max_df
+            # (raw, unresampled data) when available, so the line agrees with the
+            # min/max caption in the metric column instead of a resampled mean.
+            if show_max_line and min_max_df is not None and not min_max_df.empty and max_col:
+                main_max = min_max_df[max_col].max()
+            elif show_max_line:
+                main_max = df[max_line_col or self.y_col_main].max()
+            else:
+                main_max = None
+            max_line = None
+            max_label = None
+            if pd.notna(main_max):
+                max_line_df = pd.DataFrame({'y': [main_max]})
+                max_line = alt.Chart(max_line_df).mark_rule(
+                    color='#EF4444', strokeDash=[4, 4], strokeWidth=1, opacity=0.6
+                ).encode(y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)))
+
+                max_label_df = pd.DataFrame({
+                    x_col: [df[x_col].min()],
+                    'y': [main_max],
+                    'label': [f"{max_line_label} {main_max:{format}}{self.unit}"],
+                })
+                max_label = alt.Chart(max_label_df).mark_text(
+                    align='left', baseline='bottom', dy=-2, color='#EF4444', fontSize=11
+                ).encode(
+                    x=alt.X(f"{x_col}:T"),
+                    y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)),
+                    text='label:N'
+                )
+
+            # Full-width horizontal reference line through the main series' trough,
+            # labeled with the min value just below it. Sourced from min_max_df
+            # (raw, unresampled data) when available, so the line agrees with the
+            # min/max caption in the metric column instead of a resampled mean.
+            if show_min_line and min_max_df is not None and not min_max_df.empty and min_col:
+                main_min = min_max_df[min_col].min()
+            elif show_min_line:
+                main_min = df[min_line_col or self.y_col_main].min()
+            else:
+                main_min = None
+            min_line = None
+            min_label = None
+            if pd.notna(main_min):
+                min_line_df = pd.DataFrame({'y': [main_min]})
+                min_line = alt.Chart(min_line_df).mark_rule(
+                    color='#3B82F6', strokeDash=[4, 4], strokeWidth=1, opacity=0.6
+                ).encode(y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)))
+
+                min_label_df = pd.DataFrame({
+                    x_col: [df[x_col].min()],
+                    'y': [main_min],
+                    'label': [f"{min_line_label} {main_min:{format}}{self.unit}"],
+                })
+                min_label = alt.Chart(min_label_df).mark_text(
+                    align='left', baseline='top', dy=2, color='#3B82F6', fontSize=11
+                ).encode(
+                    x=alt.X(f"{x_col}:T"),
+                    y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)),
+                    text='label:N'
+                )
+
+            layers = (
+                ([day_lines] if day_lines is not None else [])
+                + ([max_line, max_label] if max_line is not None else [])
+                + ([min_line, min_label] if min_line is not None else [])
+                + [main_mark, selectors, rules, points]
+            )
 
             if prediction_df is not None and prediction_col is not None and not prediction_df.empty:
                 pred_line = alt.Chart(prediction_df).mark_line(
                     strokeWidth=2, strokeDash=[6, 3], opacity=0.8, color='#F97316'
                 ).encode(
-                    x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(format='%H:%M')),
+                    x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(labelExpr=DATE_AT_MIDNIGHT_LABEL_EXPR)),
                     y=alt.Y(f"{prediction_col}:Q",
                             scale=alt.Scale(domain=y_domain, clamp=True)),
                     tooltip=[
@@ -723,6 +916,103 @@ class TimeSeriesDashboardItem:
             ).interactive()
 
             st.altair_chart(chart, use_container_width=True)
+
+
+# Fixed categorical slot order (blue, aqua, yellow, green, violet, red) so a
+# variable keeps its color regardless of which other series are toggled on.
+OVERLAY_SERIES_COLORS = {
+    'sht_temperature_avg': '#2a78d6',
+    'sht_humidity_avg': '#1baf7a',
+    'bmp_pressure_avg': '#eda100',
+    'light_intensity_avg': '#008300',
+    'wind_speed_kmh_avg': '#4a3aa7',
+    'rain_mm': '#e34948',
+}
+
+
+def plot_normalized_overlay(df, series_config, x_col='received_at', height=420):
+    """
+    Overlays multiple differently-scaled series on one chart by indexing each to
+    0-100% of its own min-max range within `df`. Only the line's vertical
+    position is normalized; the tooltip and legend still show real values/units,
+    since the normalized percentage alone isn't meaningful.
+
+    series_config: list of dicts with keys 'col', 'label', 'unit', 'color', 'format'.
+    """
+    if df.empty or not series_config:
+        return None
+
+    long_rows = []
+    for s in series_config:
+        col = s['col']
+        if col not in df.columns:
+            continue
+        series = df[col]
+        col_min, col_max = series.min(), series.max()
+        span = col_max - col_min
+        if pd.isna(span) or span == 0:
+            normalized = pd.Series(50.0, index=series.index)
+        else:
+            normalized = (series - col_min) / span * 100
+
+        long_rows.append(pd.DataFrame({
+            x_col: df[x_col],
+            'Variable': s['label'],
+            'Normalized': normalized,
+        }))
+
+    if not long_rows:
+        return None
+
+    melted = pd.concat(long_rows, ignore_index=True)
+
+    color_scale = alt.Scale(
+        domain=[s['label'] for s in series_config],
+        range=[s['color'] for s in series_config],
+    )
+
+    base = alt.Chart(melted).encode(
+        x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(labelExpr=DATE_AT_MIDNIGHT_LABEL_EXPR)),
+        y=alt.Y("Normalized:Q", title="Genormaliseerd (0-100%)",
+                scale=alt.Scale(domain=[0, 100], clamp=True),
+                axis=alt.Axis(values=[0, 50, 100])),
+        color=alt.Color("Variable:N", scale=color_scale, title=None,
+                         legend=alt.Legend(orient="bottom", symbolType='stroke', symbolStrokeWidth=3)),
+    )
+
+    lines = base.mark_line(strokeWidth=2)
+
+    nearest = alt.selection_point(on='mouseover', nearest=True, fields=[x_col],
+                                  encodings=['x'], empty=False)
+
+    # Tooltip is built off the original wide df so hovering shows every
+    # enabled series' real value (with unit) together in one box.
+    tooltip_list = [alt.Tooltip(f"{x_col}:T", title="Time", format='%d %b %H:%M')]
+    for s in series_config:
+        if s['col'] in df.columns:
+            tooltip_list.append(
+                alt.Tooltip(f"{s['col']}:Q", title=f"{s['label']} ({s.get('unit', '')})",
+                            format=s.get('format', '.2f'))
+            )
+
+    selectors = alt.Chart(df).mark_rule().encode(
+        x=f"{x_col}:T",
+        opacity=alt.value(0),
+        tooltip=tooltip_list,
+    ).add_params(nearest)
+
+    rules = alt.Chart(melted).mark_rule(color='#A1A6B4', strokeDash=[4, 4]).encode(
+        x=f"{x_col}:T",
+    ).transform_filter(nearest)
+
+    points = base.mark_point(size=30).encode(
+        opacity=alt.condition(nearest, alt.value(1), alt.value(0))
+    )
+
+    day_lines = day_boundary_chart(get_day_boundaries(df[x_col]), x_col)
+    layers = ([day_lines] if day_lines is not None else []) + [lines, selectors, rules, points]
+
+    return alt.layer(*layers).properties(width='container', height=height).interactive()
 
 
 import math
@@ -795,6 +1085,7 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
     return f'''
 <div style="display:flex; justify-content:center;">
 <svg width="{width}" height="{height}" viewBox="0 0 {width} {height}"
+     style="width:100%; max-width:{width}px; height:auto; display:block;"
      xmlns="http://www.w3.org/2000/svg" role="img"
      aria-label="Gauge, current value {value:.1f} {unit}">
   <path d="{track_path}" fill="none" stroke="{track_color}" stroke-width="{stroke_w}" stroke-linecap="round"/>
