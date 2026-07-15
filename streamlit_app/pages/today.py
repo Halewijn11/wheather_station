@@ -9,7 +9,7 @@ discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
 
-st.title("Today")
+st.title("Dashboard")
 
 last_datapoint = df['received_at'].max()
 if pd.notna(last_datapoint):
