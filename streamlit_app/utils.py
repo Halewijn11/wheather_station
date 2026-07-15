@@ -10,6 +10,7 @@ from datetime import datetime
 import os
 import pytz
 import calendar
+import uuid
 from pandas.tseries.frequencies import to_offset
 
 CUSTOM_RANGE_LABEL = "Custom Range"
@@ -1124,11 +1125,17 @@ import math
 def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2,
                          track_color="#DBEAFE", fill_color="#2563EB",
                          needle_color="#3d3a2a", muted_color="#898781",
-                         width=320, height=240):
+                         width=320, height=240, gradient_colors=None):
     """
     Renders a semi-circular analog gauge (barometer-style) as an SVG string.
     value is clamped to [min_val, max_val] for the needle/arc; the raw value is
     still shown as text so an out-of-range reading is visible, not hidden.
+
+    gradient_colors: optional (start_hex, end_hex) tuple. When given, both the
+    track and the fill arc are painted with a left-to-right gradient between
+    those colors instead of flat track_color/fill_color - e.g. blue (cold) at
+    min_val to red (hot) at max_val, so the arc itself encodes where on the
+    scale a reading sits, not just the needle.
     """
     if value is None or pd.isna(value):
         return ""
@@ -1153,6 +1160,21 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
     track_path = arc_path(180, 0, r)
     value_angle = 180 - frac * 180
     fill_path = arc_path(180, value_angle, r)
+
+    gradient_defs = ""
+    if gradient_colors is not None:
+        gradient_id = f"gauge-grad-{uuid.uuid4().hex[:8]}"
+        gx1, gy1 = point(180, r)
+        gx2, gy2 = point(0, r)
+        gradient_defs = (
+            f'<defs><linearGradient id="{gradient_id}" gradientUnits="userSpaceOnUse" '
+            f'x1="{gx1:.2f}" y1="{gy1:.2f}" x2="{gx2:.2f}" y2="{gy2:.2f}">'
+            f'<stop offset="0%" stop-color="{gradient_colors[0]}"/>'
+            f'<stop offset="100%" stop-color="{gradient_colors[1]}"/>'
+            f'</linearGradient></defs>'
+        )
+        track_color = f"url(#{gradient_id})"
+        fill_color = f"url(#{gradient_id})"
 
     # Ticks + selective labels (every `label_every`-th tick, to avoid clutter)
     ticks_svg = []
@@ -1187,13 +1209,16 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
     base_lx, base_ly = cx + perp_x * needle_half_w, cy + perp_y * needle_half_w
     base_rx, base_ry = cx - perp_x * needle_half_w, cy - perp_y * needle_half_w
 
+    track_opacity = 0.3 if gradient_colors is not None else 1
+
     return f'''
-<div style="display:flex; justify-content:center;">
+<div style="display:flex; justify-content:flex-start;">
 <svg width="{width}" height="{height}" viewBox="0 0 {width} {height}"
      style="width:100%; max-width:{width}px; height:auto; display:block;"
      xmlns="http://www.w3.org/2000/svg" role="img"
      aria-label="Gauge, current value {value:.1f} {unit}">
-  <path d="{track_path}" fill="none" stroke="{track_color}" stroke-width="{stroke_w}" stroke-linecap="round"/>
+  {gradient_defs}
+  <path d="{track_path}" fill="none" stroke="{track_color}" stroke-width="{stroke_w}" stroke-linecap="round" stroke-opacity="{track_opacity}"/>
   <path d="{fill_path}" fill="none" stroke="{fill_color}" stroke-width="{stroke_w}" stroke-linecap="round"/>
   {''.join(ticks_svg)}
   <polygon points="{base_lx:.2f},{base_ly:.2f} {nx:.2f},{ny:.2f} {base_rx:.2f},{base_ry:.2f}" fill="{needle_color}"/>
