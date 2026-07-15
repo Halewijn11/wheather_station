@@ -23,7 +23,7 @@ st_autorefresh(interval=60_000, key="dashboard_autorefresh")
 
 
 
-st.title("Wheather dashboard")
+st.title("Grafieken")
 
 
 # #--------------------- general preamble to load data -----------------------------
