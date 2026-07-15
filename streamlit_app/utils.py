@@ -1071,8 +1071,9 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
                 f'font-family="system-ui, sans-serif">{tick_val:g}</text>'
             )
 
-    # Needle (drawn as a tapered arrow/dart shape rather than a plain line)
-    needle_len = r - 25 * scale
+    # Needle (drawn as a tapered arrow/dart shape rather than a plain line).
+    # Reaches radius r, the center of the ring (the arc is stroked around r).
+    needle_len = r
     nx, ny = point(value_angle, needle_len)
 
     dx, dy = nx - cx, ny - cy
