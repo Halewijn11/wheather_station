@@ -95,14 +95,17 @@ st.subheader("Temperature")
 temp_stats = stat_with_time(filtered_df, "sht_temperature_avg")
 temp_24h_ago_val, _ = utils.value_at_offset(df, "sht_temperature_avg", 24 * 3600)
 
-thermo_col, col1, col2, col3, col4 = st.columns([1.2, 1, 1, 1, 1])
+thermo_col, col2, col3, col4 = st.columns([2.7, 1, 1, 1])
 with thermo_col:
     st.markdown(
-        utils.render_thermometer(temp_stats['current'], min_val=-10, max_val=40, unit="°C", width=70, height=168),
+        utils.render_analog_gauge(
+            temp_stats['current'], min_val=-10, max_val=40, unit="°C",
+            step=10, label_every=1,
+            gradient_colors=("#2563EB", "#DC2626"),
+            width=300, height=225
+        ),
         unsafe_allow_html=True
     )
-with col1:
-    st.metric("Current", f"{temp_stats['current']:.1f} °C")
 with col2:
     st.metric("Min", f"{temp_stats['min_val']:.1f} °C")
     st.caption(f"at {local_time_str(temp_stats['min_time'])}")
@@ -116,20 +119,41 @@ with col4:
     else:
         st.metric("24h ago", "N/A")
 
+# #--------------------- sun -----------------------------
+st.subheader("Sun")
+sun_stats = stat_with_time(filtered_df, "light_intensity_max")
+sun_energy_kwh, sun_energy_mj = utils.compute_todays_solar_energy(df, col="light_intensity_avg")
+
+sun_gauge_col, sun_col2, sun_col3 = st.columns([1.8, 1, 1])
+with sun_gauge_col:
+    st.markdown(
+        utils.render_analog_gauge(
+            sun_stats['current'], min_val=0, max_val=1000, unit="W/m²",
+            step=100, label_every=2,
+            track_color="#FEF3C7", fill_color="#F59E0B",
+            width=300, height=225
+        ),
+        unsafe_allow_html=True
+    )
+with sun_col2:
+    st.metric("Max", f"{sun_stats['max_val']:.0f} W/m²")
+    st.caption(f"at {local_time_str(sun_stats['max_time'])}")
+with sun_col3:
+    st.metric("Energie vandaag", f"{sun_energy_kwh:.2f} kWh/m²")
+    st.caption(f"{sun_energy_mj:.1f} MJ/m²")
+
 # #--------------------- pressure -----------------------------
 st.subheader("Pressure")
 pressure_stats = stat_with_time(filtered_df, "bmp_pressure_avg")
 for key in ("current", "min_val", "max_val"):
     pressure_stats[key] = pressure_stats[key] / 100  # Pa -> hPa
 
-gauge_col, p_col1, p_col2, p_col3 = st.columns([1.8, 1, 1, 1])
+gauge_col, p_col2, p_col3 = st.columns([1.8, 1, 1])
 with gauge_col:
     st.markdown(
-        utils.render_analog_gauge(pressure_stats['current'], min_val=973, max_val=1053, unit="hPa", width=378, height=283),
+        utils.render_analog_gauge(pressure_stats['current'], min_val=973, max_val=1053, unit="hPa", width=300, height=225),
         unsafe_allow_html=True
     )
-with p_col1:
-    st.metric("Current", f"{pressure_stats['current']:.1f} hPa")
 with p_col2:
     st.metric("Min", f"{pressure_stats['min_val']:.1f} hPa")
     st.caption(f"at {local_time_str(pressure_stats['min_time'])}")
