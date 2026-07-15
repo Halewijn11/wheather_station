@@ -15,6 +15,13 @@ st.write("Sample tijd is telkens 5 seconden,dus om 5 seconden meting van bv temp
 st.write("Voor de wind is dit wat verschillend: aantal pulsen wordt geteld gedurende 5s, na 5 min wordt dan het 5s met max en min interval als de max en min weergegeven.")
 st.write("Voor de wind wordt de gemiddelde snelheid berekend uit het totaal aantal pulsen in 5 min interval.")
 
+st.subheader("Opstarten local")
+st.code(
+    'cd "C:\\Users\\u0045990\\Documents\\PlatformIO\\Projects\\wheather_station\\streamlit_app"\n'
+    '& "C:\\Users\\u0045990\\AppData\\Local\\anaconda3\\Scripts\\streamlit.exe" run streamlit_app.py',
+    language="powershell"
+)
+
 st.subheader("Resampling")
 st.markdown("""
 - Span ≤ 48u → raw data
