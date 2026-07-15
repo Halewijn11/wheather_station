@@ -9,6 +9,7 @@ import numpy as np
 from datetime import datetime
 import os
 import pytz
+import calendar
 from pandas.tseries.frequencies import to_offset
 
 CUSTOM_RANGE_LABEL = "Custom Range"
@@ -185,6 +186,108 @@ def value_at_offset(frame, col, seconds_ago, time_colname='seconds_since_now'):
         return None, None
     idx = (valid[time_colname] - seconds_ago).abs().idxmin()
     return valid.loc[idx, col], valid.loc[idx, "received_at"]
+
+
+def compute_todays_solar_energy(df, col='light_intensity_avg', interval_minutes=5):
+    """
+    Rough estimate of today's solar irradiation energy per m², integrating the
+    light sensor's average W/m² reading over its own nominal reporting interval.
+    Each record only contributes for its own interval, so a reporting gap
+    (LoRaWAN dropout, etc.) contributes nothing rather than assuming full power
+    through the gap. Not a calibrated pyranometer reading - light_intensity is
+    an empirically-scaled light sensor, so this is an estimate.
+    Resets at local midnight. Returns (kwh_per_m2, mj_per_m2).
+    """
+    if df.empty or col not in df.columns:
+        return 0.0, 0.0
+
+    tz = pytz.timezone('Europe/Brussels')
+    midnight_local = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    midnight_utc = midnight_local.astimezone(pytz.UTC)
+
+    today = df[(df['received_at'] >= midnight_utc) & df[col].notna()]
+    if today.empty:
+        return 0.0, 0.0
+
+    wh_per_m2 = (today[col] * (interval_minutes / 60)).sum()
+    kwh_per_m2 = wh_per_m2 / 1000
+    mj_per_m2 = wh_per_m2 * 3600 / 1_000_000
+    return kwh_per_m2, mj_per_m2
+
+
+def compute_daily_solar_energy(df, year, month, col='light_intensity_avg', interval_minutes=5):
+    """
+    Same estimate as compute_todays_solar_energy, broken down per calendar day
+    (Europe/Brussels local) for the given year/month. Returns a DataFrame with
+    one row per day of the month: date, day, kwh_per_m2, mj_per_m2, has_data
+    (False if the sensor reported nothing that day), is_partial (True for
+    today, if it falls within the requested month).
+    """
+    tz = pytz.timezone('Europe/Brussels')
+    days_in_month = calendar.monthrange(year, month)[1]
+    today_local_date = datetime.now(tz).date()
+    month_start = pd.Timestamp(year, month, 1).date()
+    month_end = pd.Timestamp(year, month, days_in_month).date()
+
+    if not df.empty and col in df.columns:
+        work = df.dropna(subset=['received_at', col]).copy()
+        work['local_date'] = work['received_at'].dt.tz_convert(tz).dt.date
+        work = work[(work['local_date'] >= month_start) & (work['local_date'] <= month_end)]
+        wh_by_day = (work[col] * (interval_minutes / 60)).groupby(work['local_date']).sum()
+    else:
+        wh_by_day = pd.Series(dtype=float)
+
+    rows = []
+    for day in range(1, days_in_month + 1):
+        date = pd.Timestamp(year, month, day).date()
+        has_data = date in wh_by_day.index
+        wh_per_m2 = float(wh_by_day.loc[date]) if has_data else 0.0
+        rows.append({
+            'date': date,
+            'day': day,
+            'kwh_per_m2': wh_per_m2 / 1000,
+            'mj_per_m2': wh_per_m2 * 3600 / 1_000_000,
+            'has_data': has_data,
+            'is_partial': date == today_local_date,
+        })
+    return pd.DataFrame(rows)
+
+
+def compute_daily_rain(df, year, month, col='rain_mm'):
+    """
+    Total rainfall (mm) per calendar day (Europe/Brussels local) for the given
+    live-sensor year/month. rain_mm is already a per-record amount, so daily
+    total is a plain sum (no time-weighting, unlike the solar energy estimate).
+    Returns a DataFrame with one row per day: date, day, rain_mm, has_data
+    (False if the sensor reported nothing that day), is_partial (True for
+    today, if it falls within the requested month).
+    """
+    tz = pytz.timezone('Europe/Brussels')
+    days_in_month = calendar.monthrange(year, month)[1]
+    today_local_date = datetime.now(tz).date()
+    month_start = pd.Timestamp(year, month, 1).date()
+    month_end = pd.Timestamp(year, month, days_in_month).date()
+
+    if not df.empty and col in df.columns:
+        work = df.dropna(subset=['received_at', col]).copy()
+        work['local_date'] = work['received_at'].dt.tz_convert(tz).dt.date
+        work = work[(work['local_date'] >= month_start) & (work['local_date'] <= month_end)]
+        mm_by_day = work.groupby('local_date')[col].sum()
+    else:
+        mm_by_day = pd.Series(dtype=float)
+
+    rows = []
+    for day in range(1, days_in_month + 1):
+        date = pd.Timestamp(year, month, day).date()
+        has_data = date in mm_by_day.index
+        rows.append({
+            'date': date,
+            'day': day,
+            'rain_mm': float(mm_by_day.loc[date]) if has_data else 0.0,
+            'has_data': has_data,
+            'is_partial': date == today_local_date,
+        })
+    return pd.DataFrame(rows)
 
 
 def filter_data(df, window_hours=1, mode='live'):

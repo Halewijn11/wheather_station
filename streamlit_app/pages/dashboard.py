@@ -179,6 +179,9 @@ else:
         latest_light_val = time_window_df[light_avg_col].iloc[-1]
         st.metric("Current", f"{latest_light_val:.1f} W/m²")
 
+        energy_kwh, energy_mj = utils.compute_todays_solar_energy(df, col=light_avg_col)
+        st.caption(f"Energie vandaag (schatting): {energy_kwh:.2f} kWh/m² · {energy_mj:.1f} MJ/m²")
+
     with col2:
         light_melted = time_window_df[["received_at", light_avg_col, light_max_col]].rename(
             columns={light_avg_col: "average", light_max_col: "max"}

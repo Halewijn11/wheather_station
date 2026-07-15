@@ -26,6 +26,11 @@ regen_page = st.Page(
     title="Regen",
     icon=":material/rainy:",
 )
+zon_page = st.Page(
+    "pages/zon.py",
+    title="Zon",
+    icon=":material/wb_sunny:",
+)
 status_page = st.Page(
     "pages/status.py",
     title="Status",
@@ -46,7 +51,7 @@ info_page = st.Page(
 # )
 
 # --- NAVIGATION SETUP [WITHOUT SECTIONS] ---
-pg = st.navigation(pages=[dashboard_page, overlay_page, today_page, regen_page, status_page, info_page])
+pg = st.navigation(pages=[dashboard_page, overlay_page, today_page, regen_page, zon_page, status_page, info_page])
 
 # --- RUN NAVIGATION ---
 pg.run()

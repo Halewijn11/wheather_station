@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import altair as alt
 import utils
 import os
 import pytz
@@ -52,6 +53,53 @@ else:
     monthly_counts = pd.Series(dtype=int)
     sensor_years = set()
 
+# --- Daily rainfall bar chart (live sensor years only; historical data is monthly-only) ---
+st.subheader("Regenval per dag")
+if not sensor_years:
+    st.info("Geen live sensordata beschikbaar voor een dagelijkse weergave.")
+else:
+    daily_years = sorted(sensor_years)
+    now_local = datetime.now(tz)
+    default_year_index = daily_years.index(now_local.year) if now_local.year in daily_years else len(daily_years) - 1
+
+    col_year, col_month = st.columns(2)
+    with col_year:
+        daily_year = st.selectbox("Jaar", daily_years, index=default_year_index, key="regen_daily_year")
+    with col_month:
+        daily_month = st.selectbox(
+            "Maand", list(range(1, 13)),
+            format_func=lambda m: calendar.month_name[m],
+            index=now_local.month - 1,
+            key="regen_daily_month",
+        )
+
+    daily_rain = utils.compute_daily_rain(df, daily_year, daily_month)
+    daily_rain_present = daily_rain[daily_rain['has_data']].copy()
+
+    if daily_rain_present.empty:
+        st.warning("Geen data voor deze maand")
+    else:
+        daily_rain_present['status'] = daily_rain_present['is_partial'].map({True: 'Vandaag (tot nu)', False: 'Volledige dag'})
+        daily_rain_present['date_str'] = pd.to_datetime(daily_rain_present['date']).dt.strftime('%d %b')
+
+        rain_color_scale = alt.Scale(domain=['Volledige dag', 'Vandaag (tot nu)'], range=['#93C5FD', '#D6EAFE'])
+
+        rain_chart = alt.Chart(daily_rain_present).mark_bar().encode(
+            x=alt.X('day:O', title='Dag', axis=alt.Axis(labelAngle=0)),
+            y=alt.Y('rain_mm:Q', title='mm'),
+            color=alt.Color('status:N', scale=rain_color_scale, title=None, legend=alt.Legend(orient='bottom')),
+            tooltip=[
+                alt.Tooltip('date_str:N', title='Datum'),
+                alt.Tooltip('rain_mm:Q', title='mm', format='.1f'),
+            ]
+        ).properties(width='container', height=300)
+
+        st.altair_chart(rain_chart, use_container_width=True)
+
+        if daily_rain_present['is_partial'].any():
+            st.caption("Vandaag is nog niet volledig; de staaf toont de regenval tot nu toe.")
+
+st.subheader("Regenval per maand")
 years = sorted(sensor_years | set(HISTORICAL_RAIN_MM.keys()))
 months = list(range(1, 13))
 month_labels = [calendar.month_abbr[m] for m in months]
