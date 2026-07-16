@@ -29,6 +29,7 @@ ALL_SERIES = [
     {'col': 'wind_speed_kmh_avg', 'label': 'Windsnelheid (avg)', 'unit': 'km/h', 'format': '.0f'},
     {'col': 'rain_mm', 'label': 'Regen', 'unit': 'mm', 'format': '.1f'},
     {'col': 'wind_speed_kmh_max', 'label': 'Windsnelheid (max)', 'unit': 'km/h', 'format': '.0f'},
+    {'col': 'wind_direction', 'label': 'Windrichting', 'unit': '°', 'format': '.0f', 'chart_type': 'scatter'},
 ]
 for s in ALL_SERIES:
     s['color'] = utils.OVERLAY_SERIES_COLORS[s['col']]
