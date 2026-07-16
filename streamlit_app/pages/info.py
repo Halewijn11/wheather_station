@@ -30,6 +30,11 @@ st.markdown("""
 - span > 30d → resample 3h
 """)
 
+st.subheader("windroos")
+st.markdown("""
+data worden in windroos pas opgenomen vanaf wind_max 3 km/h en dit voor beide rozen
+""")
+
 # st.markdown("check out this [link](%s)" % url)
 # st.markdown("check out this [link](%s)" % url)
 # """

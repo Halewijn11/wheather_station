@@ -1045,6 +1045,7 @@ OVERLAY_SERIES_COLORS = {
     'wind_speed_kmh_avg': '#4a3aa7',
     'rain_mm': '#e34948',
     'wind_speed_kmh_max': '#e87ba4',
+    'wind_direction': '#eb6834',
 }
 
 
@@ -1077,6 +1078,7 @@ def plot_normalized_overlay(df, series_config, x_col='received_at', height=420):
             x_col: df[x_col],
             'Variable': s['label'],
             'Normalized': normalized,
+            'ChartType': s.get('chart_type', 'line'),
         }))
 
     if not long_rows:
@@ -1089,16 +1091,28 @@ def plot_normalized_overlay(df, series_config, x_col='received_at', height=420):
         range=[s['color'] for s in series_config],
     )
 
-    base = alt.Chart(melted).encode(
-        x=alt.X(f"{x_col}:T", title=None, axis=alt.Axis(labelExpr=DATE_AT_MIDNIGHT_LABEL_EXPR)),
-        y=alt.Y("Normalized:Q", title="Genormaliseerd (0-100%)",
-                scale=alt.Scale(domain=[0, 100], clamp=True),
-                axis=alt.Axis(values=[0, 50, 100])),
-        color=alt.Color("Variable:N", scale=color_scale, title=None,
-                         legend=alt.Legend(orient="bottom", symbolType='stroke', symbolStrokeWidth=3)),
-    )
+    x_encoding = alt.X(f"{x_col}:T", title=None, axis=alt.Axis(labelExpr=DATE_AT_MIDNIGHT_LABEL_EXPR))
+    y_encoding = alt.Y("Normalized:Q", title="Genormaliseerd (0-100%)",
+                        scale=alt.Scale(domain=[0, 100], clamp=True),
+                        axis=alt.Axis(values=[0, 50, 100]))
+    color_encoding = alt.Color("Variable:N", scale=color_scale, title=None,
+                                legend=alt.Legend(orient="bottom", symbolType='stroke', symbolStrokeWidth=3))
 
-    lines = base.mark_line(strokeWidth=2)
+    # Most series are connected lines; series flagged chart_type='scatter'
+    # (e.g. wind direction, where a connected line is misleading) render as
+    # standalone points instead.
+    line_data = melted[melted['ChartType'] != 'scatter']
+    point_data = melted[melted['ChartType'] == 'scatter']
+
+    main_layers = []
+    if not line_data.empty:
+        main_layers.append(
+            alt.Chart(line_data).mark_line(strokeWidth=2).encode(x=x_encoding, y=y_encoding, color=color_encoding)
+        )
+    if not point_data.empty:
+        main_layers.append(
+            alt.Chart(point_data).mark_point(size=18, filled=True).encode(x=x_encoding, y=y_encoding, color=color_encoding)
+        )
 
     nearest = alt.selection_point(on='mouseover', nearest=True, fields=[x_col],
                                   encodings=['x'], empty=False)
@@ -1123,12 +1137,13 @@ def plot_normalized_overlay(df, series_config, x_col='received_at', height=420):
         x=f"{x_col}:T",
     ).transform_filter(nearest)
 
-    points = base.mark_point(size=30).encode(
+    hover_points = alt.Chart(melted).mark_point(size=30).encode(
+        x=x_encoding, y=y_encoding, color=color_encoding,
         opacity=alt.condition(nearest, alt.value(1), alt.value(0))
     )
 
     day_lines = day_boundary_chart(get_day_boundaries(df[x_col]), x_col)
-    layers = ([day_lines] if day_lines is not None else []) + [lines, selectors, rules, points]
+    layers = ([day_lines] if day_lines is not None else []) + main_layers + [selectors, rules, hover_points]
 
     return alt.layer(*layers).properties(width='container', height=height).interactive()
 
@@ -1313,11 +1328,16 @@ def render_wind_rose_legend_html(speed_bins=WIND_SPEED_BINS, colors=WIND_ROSE_CO
 
 
 def build_wind_rose_data(df, direction_col='wind_direction', speed_col='wind_speed_kmh_avg',
-                          n_sectors=16, speed_bins=WIND_SPEED_BINS):
+                          n_sectors=16, speed_bins=WIND_SPEED_BINS,
+                          gate_col='wind_speed_kmh_max', min_gate_speed=3.0):
     """
     Bins readings into n_sectors compass sectors x speed bands, and returns
     per (sector, speed band) the reading count plus cumulative counts for
     stacking - the inputs a stacked wind rose chart needs.
+
+    A reading is only counted if `gate_col` (the gust/max speed, regardless of
+    which column the rose itself displays) is at least `min_gate_speed` - below
+    that, the wind vane's direction is effectively noise.
     """
     sector_names = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
                      'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
@@ -1332,11 +1352,12 @@ def build_wind_rose_data(df, direction_col='wind_direction', speed_col='wind_spe
     rose['theta_end'] = np.deg2rad(center_deg + sector_width / 2)
     rose['speed_bin'] = pd.Categorical(rose['speed_bin'], categories=speed_labels, ordered=True)
 
-    # Exclude calm (0 km/h) readings - the wind vane's direction is meaningless
-    # noise when there's no wind, and would otherwise pollute the rose with
-    # arbitrary-direction "calm" wedges.
-    data = df[[direction_col, speed_col]].dropna()
-    data = data[data[speed_col] != 0]
+    # Exclude calm/near-calm readings, gated on gust speed rather than the
+    # rose's own display column - below min_gate_speed, the wind vane's
+    # direction is effectively noise, regardless of avg vs max.
+    cols_needed = list(dict.fromkeys([direction_col, speed_col, gate_col]))
+    data = df[cols_needed].dropna()
+    data = data[data[gate_col] >= min_gate_speed]
     if not data.empty:
         sector_idx = (np.round(data[direction_col] / sector_width) % n_sectors).astype(int)
         speed_bin = pd.cut(data[speed_col], bins=speed_bins, labels=speed_labels, right=False, include_lowest=True)
