@@ -1319,7 +1319,11 @@ def build_wind_rose_data(df, direction_col='wind_direction', speed_col='wind_spe
     rose['theta_end'] = np.deg2rad(center_deg + sector_width / 2)
     rose['speed_bin'] = pd.Categorical(rose['speed_bin'], categories=speed_labels, ordered=True)
 
+    # Exclude calm (0 km/h) readings - the wind vane's direction is meaningless
+    # noise when there's no wind, and would otherwise pollute the rose with
+    # arbitrary-direction "calm" wedges.
     data = df[[direction_col, speed_col]].dropna()
+    data = data[data[speed_col] != 0]
     if not data.empty:
         sector_idx = (np.round(data[direction_col] / sector_width) % n_sectors).astype(int)
         speed_bin = pd.cut(data[speed_col], bins=speed_bins, labels=speed_labels, right=False, include_lowest=True)
