@@ -37,6 +37,7 @@ asset_path = os.path.join(current_dir, "..", "assets")
 discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
+utils.show_last_datapoint_caption(df)
 
 tz = pytz.timezone('Europe/Brussels')
 work = df.dropna(subset=['received_at']).copy() if not df.empty else df

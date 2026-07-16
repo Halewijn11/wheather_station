@@ -4,13 +4,14 @@ import utils
 import os
 
 st.title("Overlay")
-st.caption("Alle grafieken over elkaar, elke reeks genormaliseerd naar 0-100% van haar eigen bereik. Echte waarden blijven zichtbaar via de tooltip.")
 
 current_dir = os.path.dirname(__file__)
 asset_path = os.path.join(current_dir, "..", "assets")
 discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
+utils.show_last_datapoint_caption(df)
+st.caption("Alle grafieken over elkaar, elke reeks genormaliseerd naar 0-100% van haar eigen bereik. Echte waarden blijven zichtbaar via de tooltip.")
 
 selected_label = utils.get_shared_time_range_selection("Select Time Range:")
 
