@@ -10,17 +10,7 @@ discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
 
 st.title("Dashboard")
-
-last_datapoint = df['received_at'].max()
-if pd.notna(last_datapoint):
-    last_datapoint_ts = pd.Timestamp(last_datapoint)
-    if last_datapoint_ts.tzinfo is None:
-        last_datapoint_ts = last_datapoint_ts.tz_localize('UTC')
-    last_datapoint_local = last_datapoint_ts.tz_convert('Europe/Brussels')
-    last_datapoint_str = f"{last_datapoint_local.strftime('%a')} {last_datapoint_local.day} {last_datapoint_local.strftime('%b')} {last_datapoint_local.strftime('%H:%M')}"
-    st.caption(f"Last datapoint on: {last_datapoint_str}")
-else:
-    st.caption("Last datapoint on: N/A")
+utils.show_last_datapoint_caption(df)
 
 # #--------------------- sunset and sunrise -----------------------------
 sunrise_str, sunset_str = utils.get_sunrise_sunset()

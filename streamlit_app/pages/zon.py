@@ -10,13 +10,14 @@ from datetime import datetime
 
 st.set_page_config(layout="wide")
 st.title("Zon")
-st.caption("Geschatte zonne-instraling per m², per dag. Zelfde berekening als 'Energie vandaag' op het dashboard.")
 
 current_dir = os.path.dirname(__file__)
 asset_path = os.path.join(current_dir, "..", "assets")
 discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
+utils.show_last_datapoint_caption(df)
+st.caption("Geschatte zonne-instraling per m², per dag. Zelfde berekening als 'Energie vandaag' op het dashboard.")
 
 tz = pytz.timezone('Europe/Brussels')
 now_local = datetime.now(tz)

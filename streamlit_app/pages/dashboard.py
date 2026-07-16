@@ -25,7 +25,6 @@ st_autorefresh(interval=60_000, key="dashboard_autorefresh")
 
 st.title("Grafieken")
 
-
 # #--------------------- general preamble to load data -----------------------------
 # url = "https://docs.google.com/spreadsheets/d/1OW-KdOF9BSuR66o9qbumSkNck3TlXb1himbQnLeFvVE/edit?gid=0#gid=0"
 # conn = st.connection("gsheets", type=GSheetsConnection)
@@ -44,7 +43,7 @@ asset_path = os.path.join(current_dir, "..", "assets")
 discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
-
+utils.show_last_datapoint_caption(df)
 
 # #--------------------- current date -----------------------------
 # 1. Get the current date
@@ -61,17 +60,6 @@ st.write(date_string)
 
 # #--------------------- button for time window -----------------------------
 
-last_datapoint = df['received_at'].max()
-if pd.notna(last_datapoint):
-    last_datapoint_ts = pd.Timestamp(last_datapoint)
-    if last_datapoint_ts.tzinfo is None:
-        last_datapoint_ts = last_datapoint_ts.tz_localize('UTC')
-    last_datapoint_local = last_datapoint_ts.tz_convert('Europe/Brussels')
-    last_datapoint_str = f"{last_datapoint_local.strftime('%a')} {last_datapoint_local.day} {last_datapoint_local.strftime('%b')} {last_datapoint_local.strftime('%H:%M')}"
-    st.caption(f"Last datapoint on: {last_datapoint_str}")
-else:
-    st.caption("Last datapoint on: N/A")
-    
 if st.button("Refresh Data"):
     utils.get_data.clear()
     utils.get_forecast_df.clear()
@@ -108,8 +96,8 @@ temp_24h_ago_val, _ = utils.value_at_offset(df, "sht_temperature_avg", 24 * 3600
 # Read toggle state up front to decide which series to add; the checkboxes
 # themselves are declared later, via extra_controls, inside the chart's
 # second column (above the chart).
-show_temp_max = st.session_state.get("temp_show_max", True)
-show_temp_min = st.session_state.get("temp_show_min", True)
+show_temp_max = st.session_state.get("temp_show_max", False)
+show_temp_min = st.session_state.get("temp_show_min", False)
 
 temp_chart = utils.TimeSeriesDashboardItem(
     metric_title="Current",

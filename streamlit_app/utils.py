@@ -331,6 +331,19 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, volt
     return df
 
 @st.cache_data(ttl = 3*60)
+def show_last_datapoint_caption(df):
+    """Renders 'Last datapoint on: ...' (Europe/Brussels local time) as a caption."""
+    last_datapoint = df['received_at'].max()
+    if pd.notna(last_datapoint):
+        ts = pd.Timestamp(last_datapoint)
+        if ts.tzinfo is None:
+            ts = ts.tz_localize('UTC')
+        local = ts.tz_convert('Europe/Brussels')
+        st.caption(f"Last datapoint on: {local.strftime('%a')} {local.day} {local.strftime('%b')} {local.strftime('%H:%M')}")
+    else:
+        st.caption("Last datapoint on: N/A")
+
+
 def get_data(discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
     export_url = "https://docs.google.com/spreadsheets/d/1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q/export?format=csv&gid=0"
     google_sheet_df = pd.read_csv(export_url)

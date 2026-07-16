@@ -11,6 +11,13 @@ from datetime import datetime
 
 st.title("Status")
 
+current_dir = os.path.dirname(__file__)
+asset_path = os.path.join(current_dir, "..", "assets")
+discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
+discharge_curve = pd.read_csv(discharge_csv_path)
+df = utils.get_data(discharge_curve)
+utils.show_last_datapoint_caption(df)
+
 gs_url = "https://docs.google.com/spreadsheets/d/1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q/edit?gid=0#gid=0"
 st.write("The raw data of this project can be found back [in this google sheet](%s)." % gs_url)
 
@@ -34,22 +41,6 @@ time_window_filtering_mode = 'last_session'
 
 # if debug == True:
 #     st.write("Available columns in Sheet:", google_sheet_df.columns.tolist()) # Add this line
-current_dir = os.path.dirname(__file__)
-asset_path = os.path.join(current_dir, "..", "assets")
-discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
-discharge_curve = pd.read_csv(discharge_csv_path)
-
-df = utils.get_data(discharge_curve)
-last_datapoint = df['received_at'].max()
-if pd.notna(last_datapoint):
-    last_datapoint_ts = pd.Timestamp(last_datapoint)
-    if last_datapoint_ts.tzinfo is None:
-        last_datapoint_ts = last_datapoint_ts.tz_localize('UTC')
-    last_datapoint_local = last_datapoint_ts.tz_convert('Europe/Brussels')
-    last_datapoint_str = f"{last_datapoint_local.strftime('%a')} {last_datapoint_local.day} {last_datapoint_local.strftime('%b')} {last_datapoint_local.strftime('%H:%M')}"
-    st.caption(f"Last datapoint on: {last_datapoint_str}")
-else:
-    st.caption("Last datapoint on: N/A")
 
 df.to_csv('full_data.csv', index=False)
 # df.to_excel('full_data.xlsx', index=False)   
