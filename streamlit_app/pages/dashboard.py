@@ -43,7 +43,6 @@ asset_path = os.path.join(current_dir, "..", "assets")
 discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
-utils.show_last_datapoint_caption(df)
 
 # #--------------------- current date -----------------------------
 # 1. Get the current date
@@ -56,7 +55,11 @@ date_string = now.strftime("%A, %B %d")
 # 3. Display it in Streamlit
 st.header('Affligem, Belgium')
 
-st.write(date_string)
+date_col, last_dp_col = st.columns([1, 1])
+with date_col:
+    st.write(date_string)
+with last_dp_col:
+    utils.show_last_datapoint_caption(df)
 
 # #--------------------- button for time window -----------------------------
 
