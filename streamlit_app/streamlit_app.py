@@ -17,7 +17,7 @@ overlay_page = st.Page(
 )
 today_page = st.Page(
     "pages/today.py",
-    title="Dashboard",
+    title="Dashboard Today",
     icon=":material/today:",
     default=True,
 )

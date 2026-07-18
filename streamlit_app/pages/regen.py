@@ -146,27 +146,27 @@ for y in years:
     table_rows.append(row)
     value_rows.append(value_row)
 
-# "Totaal" row: per-month sum across all years
-total_row = {"Jaar": "Totaal"}
-grand_total, grand_has_data = 0.0, False
+# "Gemiddelde" row: per-month average across years, excluding the current,
+# still-incomplete month (it would skew that month's average too low).
+avg_row = {"Jaar": "Gemiddelde"}
 for m, label in zip(months, month_labels):
-    month_total, month_has_data, month_partial = 0.0, False, False
-    for y in years:
-        val, present = cell_value(y, m)
-        if present:
-            month_has_data = True
-            month_total += val
-            if y == current_year and m == current_month:
-                month_partial = True
-    if month_has_data:
-        total_row[label] = fmt(month_total, month_partial)
-        grand_total += month_total
-        grand_has_data = True
-    else:
-        total_row[label] = ""
-total_row["Totaal"] = fmt(grand_total, current_year in years) if grand_has_data else ""
-table_rows.append(total_row)
-value_rows.append({"Jaar": "Totaal", **{label: float("nan") for label in month_labels}, "Totaal": float("nan")})
+    month_values = [
+        val for y in years
+        for val, present in [cell_value(y, m)]
+        if present and not (y == current_year and m == current_month)
+    ]
+    avg_row[label] = fmt(sum(month_values) / len(month_values), False) if month_values else ""
+
+# Corner cell: average of yearly totals, only over years with all 12 months
+# present - a partial year's total isn't representative of "an average year".
+complete_year_totals = []
+for y in years:
+    month_presence = [cell_value(y, m) for m in months]
+    if all(present for _, present in month_presence):
+        complete_year_totals.append(sum(val for val, _ in month_presence))
+avg_row["Totaal"] = fmt(sum(complete_year_totals) / len(complete_year_totals), False) if complete_year_totals else ""
+table_rows.append(avg_row)
+value_rows.append({"Jaar": "Gemiddelde", **{label: float("nan") for label in month_labels}, "Totaal": float("nan")})
 
 if not table_rows:
     st.warning("Geen regendata beschikbaar")
@@ -197,7 +197,7 @@ else:
             rgb = lerp(NEUTRAL, BLUE, (frac - 0.5) / 0.5)
         return rgb_to_hex(rgb)
 
-    month_cells = values_df.drop(index="Totaal", columns="Totaal")
+    month_cells = values_df.drop(index="Gemiddelde", columns="Totaal")
     data_min = float(month_cells.min().min())
     data_max = float(month_cells.max().max())
 
@@ -212,7 +212,7 @@ else:
     def style_row(row):
         styles = []
         for col in table_df.columns:
-            if row.name == "Totaal" or col == "Totaal":
+            if row.name == "Gemiddelde" or col == "Totaal":
                 styles.append("")
                 continue
             v = values_df.loc[row.name, col]
@@ -223,3 +223,8 @@ else:
     table_height = (len(table_df) + 1) * 35 + 3  # header row + one row per year, no vertical scroll
     st.dataframe(styled, use_container_width=True, height=table_height)
     st.caption("Waarden in mm. * = lopende maand, nog niet volledig. Data vóór 2026 is historisch, handmatig ingevoerd.")
+    st.caption(
+        "De 'Gemiddelde'-rij toont per maand het gemiddelde over alle jaren met een volledige meting voor "
+        "die maand - de lopende, nog onvolledige maand telt niet mee. De hoekcel rechtsonder is het gemiddelde "
+        "jaartotaal, enkel berekend over jaren met alle 12 maanden aanwezig (2011 en het huidige jaar dus niet)."
+    )

@@ -9,7 +9,7 @@ discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
 
-st.title("Dashboard")
+st.title("Dashboard Today")
 utils.show_last_datapoint_caption(df)
 
 # #--------------------- sunset and sunrise -----------------------------
