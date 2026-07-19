@@ -542,6 +542,140 @@ def get_solar_noon(latitude=50.924503, longitude=4.112950):
     
     return solar_noon_str
 
+
+# --- TOA (top-of-atmosphere) solar irradiance -------------------------------
+# Spencer (1971) approximations for solar declination and the earth-sun
+# distance (eccentricity) correction. This is the theoretical clear-sky
+# irradiance with no atmosphere - a reference to compare the actual sensor
+# reading against, not a replacement for it.
+TOA_SOLAR_CONSTANT = 1361.0  # W/m^2
+
+
+def _toa_dag_van_jaar(datum):
+    return datum.timetuple().tm_yday
+
+
+def _toa_excentriciteitscorrectie(n):
+    gamma = 2 * math.pi * (n - 1) / 365
+    return (1.000110
+            + 0.034221 * math.cos(gamma)
+            + 0.001280 * math.sin(gamma)
+            + 0.000719 * math.cos(2 * gamma)
+            + 0.000077 * math.sin(2 * gamma))
+
+
+def _toa_zonsdeclinatie(n):
+    gamma = 2 * math.pi * (n - 1) / 365
+    return (0.006918
+            - 0.399912 * math.cos(gamma)
+            + 0.070257 * math.sin(gamma)
+            - 0.006758 * math.cos(2 * gamma)
+            + 0.000907 * math.sin(2 * gamma)
+            - 0.002697 * math.cos(3 * gamma)
+            + 0.001480 * math.sin(3 * gamma))
+
+
+def _toa_tijdsvergelijking(n):
+    B = math.radians(360.0 / 364.0 * (n - 81))
+    return 9.87 * math.sin(2 * B) - 7.53 * math.cos(B) - 1.5 * math.sin(B)
+
+
+def _toa_uurhoek(uur_utc, lengtegraad, n):
+    EoT = _toa_tijdsvergelijking(n)
+    zonnetijd = uur_utc + lengtegraad * 4.0 / 60.0 + EoT / 60.0
+    return 15.0 * (zonnetijd - 12.0)
+
+
+def toa_irradiance(datum_utc, latitude, longitude):
+    """
+    Instantaneous top-of-atmosphere solar irradiance (W/m^2) for a UTC
+    datetime and location. Clear-sky, no-atmosphere theoretical maximum -
+    not what the light sensor actually measures.
+    """
+    n = _toa_dag_van_jaar(datum_utc)
+    uur_utc = datum_utc.hour + datum_utc.minute / 60.0 + datum_utc.second / 3600.0
+
+    E0 = _toa_excentriciteitscorrectie(n)
+    delta = _toa_zonsdeclinatie(n)
+    h = _toa_uurhoek(uur_utc, longitude, n)
+
+    phi = math.radians(latitude)
+    h_rad = math.radians(h)
+    cos_tz = math.sin(phi) * math.sin(delta) + math.cos(phi) * math.cos(delta) * math.cos(h_rad)
+    cos_tz = max(cos_tz, 0.0)
+
+    return TOA_SOLAR_CONSTANT * E0 * cos_tz
+
+
+def toa_daily_total_wh_per_m2(datum_utc, latitude):
+    """
+    Closed-form total TOA irradiation (Wh/m^2) for the full day (sunrise to
+    sunset) of datum_utc's date, at the given latitude (longitude-independent).
+    """
+    n = _toa_dag_van_jaar(datum_utc)
+    E0 = _toa_excentriciteitscorrectie(n)
+    delta = _toa_zonsdeclinatie(n)
+    phi = math.radians(latitude)
+
+    tan_product = max(min(math.tan(phi) * math.tan(delta), 1), -1)
+    hs = math.acos(-tan_product)
+
+    H0 = (86400 / math.pi) * TOA_SOLAR_CONSTANT * E0 * (
+        math.cos(phi) * math.cos(delta) * math.sin(hs) + hs * math.sin(phi) * math.sin(delta)
+    )
+    return H0 / 3600.0  # J/m^2 per day -> Wh/m^2
+
+
+def toa_energy_wh_per_m2(start_utc, end_utc, latitude, longitude, step_minutes=5):
+    """
+    Numerically integrates toa_irradiance() from start_utc to end_utc (both
+    tz-aware UTC datetimes) into a total energy per m^2 (Wh), using the same
+    rectangle-rule approach as compute_todays_solar_energy.
+    """
+    if end_utc <= start_utc:
+        return 0.0
+    total_wh = 0.0
+    t = start_utc
+    step = timedelta(minutes=step_minutes)
+    while t < end_utc:
+        total_wh += toa_irradiance(t, latitude, longitude) * (step_minutes / 60)
+        t += step
+    return total_wh
+
+
+def get_toa_solar_stats(latitude=50.924503, longitude=4.112950):
+    """
+    Returns today's TOA solar stats for the given location:
+      - toa_now_w_m2: instantaneous TOA irradiance right now
+      - toa_daily_total_wh_m2: full-day (sunrise-sunset) TOA total
+      - toa_so_far_wh_m2: TOA total integrated from sunrise to now (0 before sunrise)
+    """
+    tz = pytz.timezone('Europe/Brussels')
+    now_local = datetime.now(tz)
+    now_utc = now_local.astimezone(pytz.UTC)
+
+    city = LocationInfo(name="Affligem", region="Belgium", timezone="Europe/Brussels",
+                         latitude=latitude, longitude=longitude)
+    s = sun(city.observer, date=now_local.date(), tzinfo=city.timezone)
+    sunrise_utc = s["sunrise"].astimezone(pytz.UTC)
+
+    return {
+        'toa_now_w_m2': toa_irradiance(now_utc, latitude, longitude),
+        'toa_daily_total_wh_m2': toa_daily_total_wh_per_m2(now_utc, latitude),
+        'toa_so_far_wh_m2': toa_energy_wh_per_m2(sunrise_utc, now_utc, latitude, longitude) if now_utc > sunrise_utc else 0.0,
+    }
+
+
+def toa_irradiance_series(timestamps_utc, latitude=50.924503, longitude=4.112950):
+    """
+    Vectorized convenience wrapper: computes toa_irradiance() for each
+    timestamp in a tz-aware (UTC) pandas Series, returning a Series aligned
+    to the same index - a smooth theoretical reference curve to compare
+    against the actual (cloud/atmosphere-attenuated) sensor reading.
+    """
+    return timestamps_utc.apply(lambda t: toa_irradiance(t.to_pydatetime(), latitude, longitude))
+
+
 def calculate_stage_of_charge(discharge_curve, num_batteries, readout_voltage):
     # 1. Calculate voltage per individual cell
     voltage_per_cell = readout_voltage / num_batteries

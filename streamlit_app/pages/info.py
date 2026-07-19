@@ -24,10 +24,16 @@ st.code(
 
 st.subheader("Resampling")
 st.markdown("""
-- Span ≤ 48u → raw data
-- 48u < span ≤ 7d → resample 30min
-- 7d < span ≤ 30d → resample 1h
-- span > 30d → resample 3h
+Welke resolutie getoond wordt hangt af van de span van de geselecteerde periode:
+- Span ≤ 48u → raw data (geen resampling, elke meting apart)
+- 48u < span ≤ 7d → resample naar 30min-interval
+- 7d < span ≤ 30d → resample naar 1u-interval
+- span > 30d → resample naar 3u-interval
+
+Hoe een datapunt in een grafiek berekend wordt:
+- De meeste kolommen (temperatuur, druk, licht, windsnelheid, ...) worden **gemiddeld** (mean) over alle metingen in het archiefinterval.
+- `rain_mm` en `wind_pulses_total` worden **opgeteld** (sum) i.p.v. gemiddeld, want dat zijn hoeveelheden per interval, geen momentopnames.
+- De cumulatieve regen wordt opnieuw gereset elke lokale (Europe/Brussels) middernacht.
 """)
 
 st.subheader("windroos")
