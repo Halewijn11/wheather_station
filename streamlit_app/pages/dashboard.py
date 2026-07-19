@@ -174,9 +174,13 @@ else:
         st.caption(f"Energie vandaag (schatting): {energy_kwh:.2f} kWh/m² · {energy_mj:.1f} MJ/m²")
 
     with col2:
-        light_melted = time_window_df[["received_at", light_avg_col, light_max_col]].rename(
-            columns={light_avg_col: "average", light_max_col: "max"}
-        ).melt(id_vars=["received_at"], value_vars=["average", "max"],
+        time_window_df = time_window_df.copy()
+        time_window_df["toa_w_m2"] = utils.toa_irradiance_series(time_window_df["received_at"])
+        toa_color = "#F97316"  # matches the forecast reference-line color used elsewhere
+
+        light_melted = time_window_df[["received_at", light_avg_col, light_max_col, "toa_w_m2"]].rename(
+            columns={light_avg_col: "average", light_max_col: "max", "toa_w_m2": "TOA"}
+        ).melt(id_vars=["received_at"], value_vars=["average", "max", "TOA"],
                var_name="Variable", value_name="Value")
 
         y_min = float(light_melted["Value"].min())
@@ -184,7 +188,7 @@ else:
         padding = (y_max - y_min) * 0.1 if y_max != y_min else 1
         y_domain = [y_min - padding, y_max + padding]
 
-        color_scale = alt.Scale(domain=["average", "max"], range=[light_avg_color, light_max_color])
+        color_scale = alt.Scale(domain=["average", "max", "TOA"], range=[light_avg_color, light_max_color, toa_color])
 
         base = alt.Chart(light_melted).encode(
             x=alt.X("received_at:T", title=None, axis=alt.Axis(labelExpr=utils.DATE_AT_MIDNIGHT_LABEL_EXPR)),
@@ -195,6 +199,9 @@ else:
 
         max_area = base.transform_filter(alt.datum.Variable == "max").mark_area(opacity=0.4)
         avg_line = base.transform_filter(alt.datum.Variable == "average").mark_line(strokeWidth=1)
+        toa_line = base.transform_filter(alt.datum.Variable == "TOA").mark_line(
+            strokeWidth=2, strokeDash=[6, 3], opacity=0.8
+        )
 
         nearest = alt.selection_point(on='mouseover', nearest=True, fields=["received_at"],
                                       encodings=['x'], empty=False)
@@ -206,6 +213,7 @@ else:
                 alt.Tooltip("received_at:T", title="Time", format='%d %b %H:%M'),
                 alt.Tooltip(f"{light_avg_col}:Q", title="average", format='.2f'),
                 alt.Tooltip(f"{light_max_col}:Q", title="max", format='.2f'),
+                alt.Tooltip("toa_w_m2:Q", title="TOA", format='.1f'),
             ]
         ).add_params(nearest)
 
@@ -269,7 +277,7 @@ else:
             ([day_lines] if day_lines is not None else [])
             + ([light_max_line, light_max_label] if light_max_line is not None else [])
             + ([light_min_line, light_min_label] if light_min_line is not None else [])
-            + [max_area, avg_line, selectors, rules, points]
+            + [max_area, avg_line, toa_line, selectors, rules, points]
         )
 
         light_chart = alt.layer(*light_layers).properties(
