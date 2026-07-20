@@ -227,20 +227,20 @@ else:
 
         day_lines = utils.day_boundary_chart(utils.get_day_boundaries(time_window_df["received_at"]))
 
-        # Full-width horizontal reference line through the average line's peak,
+        # Full-width horizontal reference line through the max area's peak,
         # labeled with the max value just above it.
-        light_avg_max = time_window_df[light_avg_col].max()
+        light_max_peak = time_window_df[light_max_col].max()
         light_max_line = None
         light_max_label = None
-        if pd.notna(light_avg_max):
-            light_max_line = alt.Chart(pd.DataFrame({'y': [light_avg_max]})).mark_rule(
+        if pd.notna(light_max_peak):
+            light_max_line = alt.Chart(pd.DataFrame({'y': [light_max_peak]})).mark_rule(
                 color='#EF4444', strokeDash=[4, 4], strokeWidth=1, opacity=0.6
             ).encode(y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)))
 
             light_max_label_df = pd.DataFrame({
                 "received_at": [time_window_df["received_at"].min()],
-                'y': [light_avg_max],
-                'label': [f"max avg {light_avg_max:.1f} W/m²"],
+                'y': [light_max_peak],
+                'label': [f"max {light_max_peak:.1f} W/m²"],
             })
             light_max_label = alt.Chart(light_max_label_df).mark_text(
                 align='left', baseline='bottom', dy=-2, color='#EF4444', fontSize=11
@@ -250,33 +250,9 @@ else:
                 text='label:N'
             )
 
-        # Full-width horizontal reference line through the average line's trough,
-        # labeled with the min value just below it.
-        light_avg_min = time_window_df[light_avg_col].min()
-        light_min_line = None
-        light_min_label = None
-        if pd.notna(light_avg_min):
-            light_min_line = alt.Chart(pd.DataFrame({'y': [light_avg_min]})).mark_rule(
-                color='#3B82F6', strokeDash=[4, 4], strokeWidth=1, opacity=0.6
-            ).encode(y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)))
-
-            light_min_label_df = pd.DataFrame({
-                "received_at": [time_window_df["received_at"].min()],
-                'y': [light_avg_min],
-                'label': [f"min avg {light_avg_min:.1f} W/m²"],
-            })
-            light_min_label = alt.Chart(light_min_label_df).mark_text(
-                align='left', baseline='top', dy=2, color='#3B82F6', fontSize=11
-            ).encode(
-                x=alt.X("received_at:T"),
-                y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)),
-                text='label:N'
-            )
-
         light_layers = (
             ([day_lines] if day_lines is not None else [])
             + ([light_max_line, light_max_label] if light_max_line is not None else [])
-            + ([light_min_line, light_min_label] if light_min_line is not None else [])
             + [max_area, avg_line, toa_line, selectors, rules, points]
         )
 
