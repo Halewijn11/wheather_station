@@ -12,6 +12,7 @@ import pytz
 import calendar
 import uuid
 import json
+import time
 from urllib.request import urlopen
 from pandas.tseries.frequencies import to_offset
 
@@ -377,8 +378,20 @@ def get_ventilator_data(channel_id=3393790, field=1, field_name='rpm', results=8
     resample_data(), and TimeSeriesDashboardItem without any special-casing.
     """
     url = f"https://api.thingspeak.com/channels/{channel_id}/feeds.json?results={results}"
-    with urlopen(url, timeout=10) as response:
-        payload = json.loads(response.read().decode())
+
+    last_error = None
+    payload = None
+    for attempt in range(3):
+        try:
+            with urlopen(url, timeout=15) as response:
+                payload = json.loads(response.read().decode())
+            break
+        except Exception as e:
+            last_error = e
+            if attempt < 2:
+                time.sleep(1.5)
+    if payload is None:
+        raise last_error
 
     feeds = payload.get('feeds') or []
     if not feeds:
