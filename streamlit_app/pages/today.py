@@ -153,7 +153,12 @@ for key in ("current", "min_val", "max_val"):
 gauge_col, p_col2, p_col3 = st.columns([1.8, 1, 1])
 with gauge_col:
     st.markdown(
-        utils.render_analog_gauge(pressure_stats['current'], min_val=973, max_val=1053, unit="hPa", width=300, height=225),
+        utils.render_analog_gauge(
+            pressure_stats['current'], min_val=970, max_val=1056, unit="hPa",
+            tick_values=[970, 980, 990, 1000, 1010, 1020, 1030, 1040, 1050],
+            marker_value=1013.25, marker_color="#DC2626",
+            width=300, height=225
+        ),
         unsafe_allow_html=True
     )
 with p_col2:
