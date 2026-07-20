@@ -117,13 +117,19 @@ with col2:
 # ).plot(time_window_df, format=".2f")
 
 
-# # #--------------------- fan_rpm -----------------------------
-# utils.TimeSeriesDashboardItem(
-#     metric_title="Fan RPM", 
-#     unit="RPM", 
-#     y_col_main="rpm", 
-#     main_color="#1E90FF"
-# ).plot(time_window_df, format=".0f")
+# #--------------------- fan rpm (ThingSpeak) -----------------------------
+ventilator_df = utils.get_ventilator_data()
+if not ventilator_df.empty:
+    filtered_ventilator_df = utils.filter_by_recency(
+        ventilator_df, window_label=selected_label, mode=time_window_filtering_mode
+    )
+    time_window_ventilator_df = utils.resample_data(filtered_ventilator_df)
+    utils.TimeSeriesDashboardItem(
+        metric_title="Fan RPM",
+        unit="RPM",
+        y_col_main="rpm",
+        main_color="#1E90FF"
+    ).plot(time_window_ventilator_df, format=".0f")
 
 
 # #--------------------- snr -----------------------------

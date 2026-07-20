@@ -11,6 +11,8 @@ import os
 import pytz
 import calendar
 import uuid
+import json
+from urllib.request import urlopen
 from pandas.tseries.frequencies import to_offset
 
 CUSTOM_RANGE_LABEL = "Custom Range"
@@ -364,6 +366,32 @@ def get_forecast_df():
     df = df.rename(columns={'forecast_for': 'received_at'})
     df = df.sort_values('received_at').reset_index(drop=True)
     return df
+
+
+@st.cache_data(ttl=3 * 60)
+def get_ventilator_data(channel_id=3393790, field=1, field_name='rpm', results=8000):
+    """
+    Fetches fan data from the public "Ventilator" ThingSpeak channel and
+    shapes it into the same schema used throughout the app (received_at UTC,
+    seconds_since_now), so it plugs directly into filter_by_recency(),
+    resample_data(), and TimeSeriesDashboardItem without any special-casing.
+    """
+    url = f"https://api.thingspeak.com/channels/{channel_id}/feeds.json?results={results}"
+    with urlopen(url, timeout=10) as response:
+        payload = json.loads(response.read().decode())
+
+    feeds = payload.get('feeds') or []
+    if not feeds:
+        return pd.DataFrame(columns=['received_at', field_name, 'seconds_since_now'])
+
+    df = pd.DataFrame(feeds)
+    df['received_at'] = pd.to_datetime(df['created_at'], utc=True)
+    df[field_name] = pd.to_numeric(df[f'field{field}'], errors='coerce')
+    df = df[['received_at', field_name]].dropna(subset=[field_name])
+
+    now = pd.Timestamp.now(tz='UTC')
+    df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
+    return df.sort_values('received_at').reset_index(drop=True)
 
 def resample_data(df, sum_cols=None, cumulative_cols=None):
     # Ensure the index is datetime for resampling
