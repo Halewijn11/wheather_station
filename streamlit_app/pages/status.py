@@ -118,8 +118,16 @@ with col2:
 
 
 # #--------------------- fan rpm (ThingSpeak) -----------------------------
-ventilator_df = utils.get_ventilator_data()
-if not ventilator_df.empty:
+st.subheader("Fan RPM")
+try:
+    ventilator_df = utils.get_ventilator_data()
+except Exception as e:
+    ventilator_df = pd.DataFrame()
+    st.warning(f"Kon ventilator-data niet ophalen van ThingSpeak: {e!r}")
+
+if ventilator_df.empty:
+    st.info("Geen ventilator-data beschikbaar.")
+else:
     filtered_ventilator_df = utils.filter_by_recency(
         ventilator_df, window_label=selected_label, mode=time_window_filtering_mode
     )
