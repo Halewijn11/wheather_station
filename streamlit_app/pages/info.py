@@ -34,6 +34,9 @@ Hoe een datapunt in een grafiek berekend wordt:
 - De meeste kolommen (temperatuur, druk, licht, windsnelheid, ...) worden **gemiddeld** (mean) over alle metingen in het archiefinterval.
 - `rain_mm` en `wind_pulses_total` worden **opgeteld** (sum) i.p.v. gemiddeld, want dat zijn hoeveelheden per interval, geen momentopnames.
 - De cumulatieve regen wordt opnieuw gereset elke lokale (Europe/Brussels) middernacht.
+- Helderheidsindex = gemeten energie tot nu / TOA-instraling tot nu (numeriek geïntegreerd sinds zonsopgang), als %
+- TOA : Spencer (1971)-benaderingen voor declinatie/excentriciteit        
+            
 """)
 
 st.subheader("windroos")

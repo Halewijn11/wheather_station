@@ -1287,7 +1287,8 @@ import math
 def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2,
                          track_color="#DBEAFE", fill_color="#2563EB",
                          needle_color="#3d3a2a", muted_color="#898781",
-                         width=320, height=240, gradient_colors=None):
+                         width=320, height=240, gradient_colors=None, tick_values=None,
+                         marker_value=None, marker_color="#3d3a2a"):
     """
     Renders a semi-circular analog gauge (barometer-style) as an SVG string.
     value is clamped to [min_val, max_val] for the needle/arc; the raw value is
@@ -1298,6 +1299,15 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
     those colors instead of flat track_color/fill_color - e.g. blue (cold) at
     min_val to red (hot) at max_val, so the arc itself encodes where on the
     scale a reading sits, not just the needle.
+
+    tick_values: optional explicit list of tick values (need not be evenly
+    spaced) - overrides the uniform step/label_every tick generation, with
+    every listed value labeled.
+
+    marker_value: optional single value to mark with a small triangle just
+    outside the arc, independent of tick_values - e.g. a reference threshold
+    (like standard sea-level pressure) that stays marked even if its number
+    isn't shown as a tick label.
     """
     if value is None or pd.isna(value):
         return ""
@@ -1338,11 +1348,17 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
         track_color = f"url(#{gradient_id})"
         fill_color = f"url(#{gradient_id})"
 
-    # Ticks + selective labels (every `label_every`-th tick, to avoid clutter)
+    # Ticks + selective labels. tick_values (explicit, possibly unevenly
+    # spaced list) takes priority; otherwise fall back to a uniform step,
+    # labeling every `label_every`-th tick to avoid clutter.
     ticks_svg = []
-    n_ticks = int(round((max_val - min_val) / step)) + 1
-    for i in range(n_ticks):
-        tick_val = min_val + i * step
+    if tick_values is not None:
+        tick_list = [(v, True) for v in tick_values]
+    else:
+        n_ticks = int(round((max_val - min_val) / step)) + 1
+        tick_list = [(min_val + i * step, i % label_every == 0) for i in range(n_ticks)]
+
+    for tick_val, show_label in tick_list:
         angle = 180 - ((tick_val - min_val) / (max_val - min_val)) * 180
         x1, y1 = point(angle, r + stroke_w / 2 + 2 * scale)
         x2, y2 = point(angle, r + stroke_w / 2 + 10 * scale)
@@ -1350,13 +1366,33 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
             f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
             f'stroke="{muted_color}" stroke-width="{1.5 * scale:.2f}"/>'
         )
-        if i % label_every == 0:
+        if show_label:
             lx, ly = point(angle, r + stroke_w / 2 + 22 * scale)
             ticks_svg.append(
                 f'<text x="{lx:.2f}" y="{ly:.2f}" font-size="{11 * scale:.2f}" fill="{muted_color}" '
                 f'text-anchor="middle" dominant-baseline="middle" '
                 f'font-family="system-ui, sans-serif">{tick_val:g}</text>'
             )
+
+    # Optional reference-threshold marker: a small triangle pointing at the
+    # arc, independent of tick_values - stays put even if that value isn't
+    # shown as a numbered tick.
+    marker_svg = ""
+    if marker_value is not None and min_val <= marker_value <= max_val:
+        marker_angle = 180 - ((marker_value - min_val) / (max_val - min_val)) * 180
+        apex_x, apex_y = point(marker_angle, r + stroke_w / 2 + 1 * scale)
+        base_x, base_y = point(marker_angle, r + stroke_w / 2 + 9 * scale)
+        mdx, mdy = apex_x - base_x, apex_y - base_y
+        mseg_len = math.hypot(mdx, mdy) or 1.0
+        mux, muy = mdx / mseg_len, mdy / mseg_len
+        mperp_x, mperp_y = -muy, mux
+        marker_half_w = 4 * scale
+        mleft_x, mleft_y = base_x + mperp_x * marker_half_w, base_y + mperp_y * marker_half_w
+        mright_x, mright_y = base_x - mperp_x * marker_half_w, base_y - mperp_y * marker_half_w
+        marker_svg = (
+            f'<polygon points="{apex_x:.2f},{apex_y:.2f} {mleft_x:.2f},{mleft_y:.2f} {mright_x:.2f},{mright_y:.2f}" '
+            f'fill="{marker_color}"/>'
+        )
 
     # Needle (drawn as a tapered arrow/dart shape rather than a plain line).
     # Reaches radius r, the center of the ring (the arc is stroked around r).
@@ -1383,6 +1419,7 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
   <path d="{track_path}" fill="none" stroke="{track_color}" stroke-width="{stroke_w}" stroke-linecap="round" stroke-opacity="{track_opacity}"/>
   <path d="{fill_path}" fill="none" stroke="{fill_color}" stroke-width="{stroke_w}" stroke-linecap="round"/>
   {''.join(ticks_svg)}
+  {marker_svg}
   <polygon points="{base_lx:.2f},{base_ly:.2f} {nx:.2f},{ny:.2f} {base_rx:.2f},{base_ry:.2f}" fill="{needle_color}"/>
   <circle cx="{cx}" cy="{cy}" r="{7 * scale:.2f}" fill="{needle_color}"/>
   <text x="{cx}" y="{cy + 42 * scale}" font-size="{30 * scale:.2f}" font-weight="600" fill="{needle_color}"
