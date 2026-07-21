@@ -257,6 +257,40 @@ def compute_daily_solar_energy(df, year, month, col='light_intensity_avg', inter
     return pd.DataFrame(rows)
 
 
+def add_clearness_index(daily_df, latitude=50.924503, longitude=4.112950, energy_col='kwh_per_m2'):
+    """
+    Adds a 'kt_pct' column (helderheidsindex, 0-100%) to a daily solar-energy
+    DataFrame as produced by compute_daily_solar_energy(): actual measured
+    energy versus the theoretical top-of-atmosphere total for that day. For
+    the partial "today" row, TOA is integrated only from local midnight to
+    now so both sides of the ratio cover the same time window, rather than
+    comparing a half-finished day against a full-day TOA total. Clamped to
+    0-100% since the light sensor isn't a calibrated pyranometer and can
+    occasionally read slightly above the theoretical maximum.
+    """
+    tz = pytz.timezone('Europe/Brussels')
+    now_utc = datetime.now(pytz.UTC)
+
+    def kt_for_row(row):
+        if not row['has_data']:
+            return float('nan')
+        date_ = row['date']
+        if row['is_partial']:
+            midnight_utc = tz.localize(datetime.combine(date_, datetime.min.time())).astimezone(pytz.UTC)
+            toa_wh = toa_energy_wh_per_m2(midnight_utc, now_utc, latitude, longitude)
+        else:
+            noon_utc = tz.localize(datetime.combine(date_, datetime.min.time().replace(hour=12))).astimezone(pytz.UTC)
+            toa_wh = toa_daily_total_wh_per_m2(noon_utc, latitude)
+        if toa_wh <= 0:
+            return float('nan')
+        actual_wh = row[energy_col] * 1000  # kWh/m² -> Wh/m²
+        return max(0.0, min(100.0, actual_wh / toa_wh * 100))
+
+    daily_df = daily_df.copy()
+    daily_df['kt_pct'] = daily_df.apply(kt_for_row, axis=1)
+    return daily_df
+
+
 def compute_daily_rain(df, year, month, col='rain_mm'):
     """
     Total rainfall (mm) per calendar day (Europe/Brussels local) for the given
