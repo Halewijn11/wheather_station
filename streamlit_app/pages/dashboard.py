@@ -64,8 +64,15 @@ with last_dp_col:
 # #--------------------- button for time window -----------------------------
 
 if st.button("Refresh Data"):
-    utils.get_data.clear()
-    utils.get_forecast_df.clear()
+    # .clear() occasionally hits Streamlit's cache-storage internals before
+    # they're fully initialized (seen right after a cold start on Streamlit
+    # Cloud) and raises AttributeError. Not clearing is harmless here since
+    # the cache has a 3min TTL anyway, so don't let it crash the page.
+    try:
+        utils.get_data.clear()
+        utils.get_forecast_df.clear()
+    except AttributeError:
+        pass
     st.success("Data refreshed!")
 
 
