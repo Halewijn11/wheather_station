@@ -36,6 +36,7 @@ with col_month:
     )
 
 daily = utils.compute_daily_solar_energy(df, selected_year, selected_month)
+daily = utils.add_clearness_index(daily)
 daily_present = daily[daily['has_data']].copy()
 
 if daily_present.empty:
@@ -43,19 +44,38 @@ if daily_present.empty:
 else:
     daily_present['status'] = daily_present['is_partial'].map({True: 'Vandaag (tot nu)', False: 'Volledige dag'})
     daily_present['date_str'] = pd.to_datetime(daily_present['date']).dt.strftime('%d %b')
+    daily_present['energy_group'] = 'kWh/m²'
+
+    kt_present = daily_present[daily_present['kt_pct'].notna()].copy()
+    kt_present['kt_group'] = 'Helderheid %'
 
     color_scale = alt.Scale(domain=['Volledige dag', 'Vandaag (tot nu)'], range=['#F59E0B', '#FDE68A'])
+    group_scale = alt.Scale(domain=['kWh/m²', 'Helderheid %'])
 
-    chart = alt.Chart(daily_present).mark_bar().encode(
+    energy_bars = alt.Chart(daily_present).mark_bar().encode(
         x=alt.X('day:O', title='Dag', axis=alt.Axis(labelAngle=0)),
+        xOffset=alt.XOffset('energy_group:N', scale=group_scale),
         y=alt.Y('kwh_per_m2:Q', title='kWh/m²'),
         color=alt.Color('status:N', scale=color_scale, title=None, legend=alt.Legend(orient='bottom')),
         tooltip=[
             alt.Tooltip('date_str:N', title='Datum'),
             alt.Tooltip('kwh_per_m2:Q', title='kWh/m²', format='.2f'),
             alt.Tooltip('mj_per_m2:Q', title='MJ/m²', format='.1f'),
+            alt.Tooltip('kt_pct:Q', title='Helderheidsindex', format='.0f'),
         ]
-    ).properties(width='container', height=350)
+    )
+
+    kt_bars = alt.Chart(kt_present).mark_bar(color='#64748B').encode(
+        x=alt.X('day:O'),
+        xOffset=alt.XOffset('kt_group:N', scale=group_scale),
+        y=alt.Y('kt_pct:Q', title='Helderheidsindex (%)', scale=alt.Scale(domain=[0, 100])),
+        tooltip=[
+            alt.Tooltip('date_str:N', title='Datum'),
+            alt.Tooltip('kt_pct:Q', title='Helderheidsindex', format='.0f'),
+        ]
+    )
+
+    chart = alt.layer(energy_bars, kt_bars).resolve_scale(y='independent').properties(width='container', height=350)
 
     st.altair_chart(chart, use_container_width=True)
 
