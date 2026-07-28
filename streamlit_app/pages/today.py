@@ -14,45 +14,46 @@ utils.show_last_datapoint_caption(df)
 
 # #--------------------- sunset and sunrise -----------------------------
 sunrise_str, sunset_str = utils.get_sunrise_sunset()
-icon_width = 6
-text_width = 15
-buffer_width = 20
 
-col1, col2, col3, col4, col5, col6, col7, col8, buffer = st.columns([icon_width, text_width,
-                                                         icon_width, text_width,
-                                                         icon_width, text_width,
-                                                        icon_width, text_width,
-                                                         buffer_width])
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    img_path = os.path.join(current_dir, "..", "assets", "sunrise.png")
-    st.image(img_path, width=50)
+    icon_col, text_col = st.columns([1, 3])
+    with icon_col:
+        img_path = os.path.join(current_dir, "..", "assets", "sunrise.png")
+        st.image(img_path, width=50)
+    with text_col:
+        st.markdown(f"**Sunrise**<br>{sunrise_str}", unsafe_allow_html=True)
+
 with col2:
-    st.markdown(f"**Sunrise**<br>{sunrise_str}", unsafe_allow_html=True)
-
-with col3:
-    img_path = os.path.join(current_dir, "..", "assets", "sunset.png")
-    st.image(img_path, width=50)
-with col4:
-    st.markdown(f"**Sunset**<br>{sunset_str}", unsafe_allow_html=True)
-
-# --- Moon Phase ---
-with col5:
-    moonphase_image_filepath, index = utils.get_moonphase_filepath(image_repo=asset_path)
-    st.image(moonphase_image_filepath, width=50)
-with col6:
-    st.markdown(f"**Moon**<br> {index}/8", unsafe_allow_html=True)
+    icon_col, text_col = st.columns([1, 3])
+    with icon_col:
+        img_path = os.path.join(current_dir, "..", "assets", "sunset.png")
+        st.image(img_path, width=50)
+    with text_col:
+        st.markdown(f"**Sunset**<br>{sunset_str}", unsafe_allow_html=True)
 
 # --- Solar Noon ---
-with col7:
-    img_path = os.path.join(asset_path, 'solar_noon.png')
-    solar_noon_str = utils.get_solar_noon()
-    st.image(img_path, width=50)
-with col8:
-    st.markdown(f"**Solar noon**<br> {solar_noon_str}", unsafe_allow_html=True)
+with col3:
+    icon_col, text_col = st.columns([1, 3])
+    with icon_col:
+        img_path = os.path.join(asset_path, 'solar_noon.png')
+        solar_noon_str = utils.get_solar_noon()
+        st.image(img_path, width=50)
+    with text_col:
+        st.markdown(
+            f'<span style="white-space: nowrap;"><b>Highest point</b></span><br> {solar_noon_str}',
+            unsafe_allow_html=True
+        )
 
-with buffer:
-    pass
+# --- Moon Phase ---
+with col4:
+    icon_col, text_col = st.columns([1, 3])
+    with icon_col:
+        moonphase_image_filepath, index = utils.get_moonphase_filepath(image_repo=asset_path)
+        st.image(moonphase_image_filepath, width=50)
+    with text_col:
+        st.markdown(f"**Moon**<br> {index}/8", unsafe_allow_html=True)
 
 filtered_df = utils.filter_by_recency(df, window_label="Since Midnight", mode='last_session')
 
