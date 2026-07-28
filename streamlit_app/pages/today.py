@@ -120,7 +120,7 @@ clearness_pct = (
     if toa_stats['toa_so_far_wh_m2'] > 0 else None
 )
 
-sun_gauge_col, sun_col2, sun_col3, sun_col4, sun_col5 = st.columns([1.8, 1, 1, 1, 1])
+sun_gauge_col, sun_col2, sun_col3 = st.columns([1.8, 1, 1])
 with sun_gauge_col:
     st.markdown(
         utils.render_analog_gauge(
@@ -137,12 +137,20 @@ with sun_col2:
 with sun_col3:
     st.metric("Energie vandaag", f"{sun_energy_kwh:.2f} kWh/m²")
     st.caption(f"{sun_energy_mj:.1f} MJ/m²")
-with sun_col4:
+
+toa_col1, toa_col2, toa_col3, toa_col4 = st.columns(4)
+with toa_col1:
     st.metric("TOA nu", f"{toa_stats['toa_now_w_m2']:.0f} W/m²")
-    st.caption(f"Dagtotaal: {toa_stats['toa_daily_total_wh_m2'] / 1000:.2f} kWh/m²")
-with sun_col5:
-    st.metric("Helderheidsindex", f"{clearness_pct:.0f}%" if clearness_pct is not None else "N/A")
-    st.caption("gemeten / TOA tot nu")
+with toa_col2:
+    st.metric("TOA dagtotaal", f"{toa_stats['toa_daily_total_wh_m2'] / 1000:.2f} kWh/m²")
+with toa_col3:
+    st.metric("TOA tot nu", f"{toa_stats['toa_so_far_wh_m2'] / 1000:.2f} kWh/m²")
+with toa_col4:
+    st.metric(
+        "Helderheidsindex",
+        f"{sun_energy_kwh:.2f}/{toa_stats['toa_so_far_wh_m2'] / 1000:.2f} = {clearness_pct:.0f}%"
+        if clearness_pct is not None else "N/A"
+    )
 
 # #--------------------- pressure -----------------------------
 st.subheader("Pressure")
