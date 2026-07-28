@@ -11,9 +11,6 @@ st.write("The raw data of this project can be found back [in this google sheet](
 
 github_url = "https://github.com/Halewijn11/wheather_station"
 st.write("The source code for this project is available on [GitHub](%s)." % github_url)
-st.write("Sample tijd is telkens 5 seconden,dus om 5 seconden meting van bv temp, de min/max/avg worden dan berekend over alle 5 seconden intervallen op deze 5 min.")
-st.write("Voor de wind is dit wat verschillend: aantal pulsen wordt geteld gedurende 5s, na 5 min wordt dan het 5s met max en min interval als de max en min weergegeven.")
-st.write("Voor de wind wordt de gemiddelde snelheid berekend uit het totaal aantal pulsen in 5 min interval.")
 
 st.subheader("Opstarten local")
 st.code(
@@ -22,9 +19,12 @@ st.code(
     language="powershell"
 )
 
-st.subheader("Resampling")
+st.subheader("(Re)-sampling")
 st.markdown("""
-Welke resolutie getoond wordt hangt af van de span van de geselecteerde periode:
+- Sample tijd is telkens 5 seconden, dus om 5 seconden meting van bv temp
+- de min/max/avg worden dan berekend over alle 5 seconden in het archief interval (5 min).
+
+Welke resolutie in grafiek wordt getoond hangt af van de span van de geselecteerde periode:
 - Span ≤ 48u → raw data (geen resampling, elke meting apart)
 - 48u < span ≤ 7d → resample naar 30min-interval
 - 7d < span ≤ 30d → resample naar 1u-interval
