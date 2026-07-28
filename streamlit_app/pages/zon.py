@@ -45,18 +45,24 @@ else:
     daily_present['status'] = daily_present['is_partial'].map({True: 'Vandaag (tot nu)', False: 'Volledige dag'})
     daily_present['date_str'] = pd.to_datetime(daily_present['date']).dt.strftime('%d %b')
     daily_present['energy_group'] = 'kWh/m²'
+    daily_present['reeks'] = daily_present['status']
 
     kt_present = daily_present[daily_present['kt_pct'].notna()].copy()
     kt_present['kt_group'] = 'Helderheid %'
+    kt_present['reeks'] = 'Helderheidsindex'
 
-    color_scale = alt.Scale(domain=['Volledige dag', 'Vandaag (tot nu)'], range=['#F59E0B', '#FDE68A'])
+    # One shared color scale/field across both layers so they merge into a single legend.
+    color_scale = alt.Scale(
+        domain=['Volledige dag', 'Vandaag (tot nu)', 'Helderheidsindex'],
+        range=['#F59E0B', '#FDE68A', '#64748B'],
+    )
     group_scale = alt.Scale(domain=['kWh/m²', 'Helderheid %'])
 
     energy_bars = alt.Chart(daily_present).mark_bar().encode(
         x=alt.X('day:O', title='Dag', axis=alt.Axis(labelAngle=0)),
         xOffset=alt.XOffset('energy_group:N', scale=group_scale),
         y=alt.Y('kwh_per_m2:Q', title='kWh/m²'),
-        color=alt.Color('status:N', scale=color_scale, title=None, legend=alt.Legend(orient='bottom')),
+        color=alt.Color('reeks:N', scale=color_scale, title=None, legend=alt.Legend(orient='bottom')),
         tooltip=[
             alt.Tooltip('date_str:N', title='Datum'),
             alt.Tooltip('kwh_per_m2:Q', title='kWh/m²', format='.2f'),
@@ -65,10 +71,11 @@ else:
         ]
     )
 
-    kt_bars = alt.Chart(kt_present).mark_bar(color='#64748B').encode(
+    kt_bars = alt.Chart(kt_present).mark_bar().encode(
         x=alt.X('day:O'),
         xOffset=alt.XOffset('kt_group:N', scale=group_scale),
         y=alt.Y('kt_pct:Q', title='Helderheidsindex (%)', scale=alt.Scale(domain=[0, 100])),
+        color=alt.Color('reeks:N', scale=color_scale, legend=None),
         tooltip=[
             alt.Tooltip('date_str:N', title='Datum'),
             alt.Tooltip('kt_pct:Q', title='Helderheidsindex', format='.0f'),

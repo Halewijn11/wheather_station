@@ -1575,7 +1575,7 @@ def render_wind_rose_legend_html(speed_bins=WIND_SPEED_BINS, colors=WIND_ROSE_CO
 
 def build_wind_rose_data(df, direction_col='wind_direction', speed_col='wind_speed_kmh_avg',
                           n_sectors=16, speed_bins=WIND_SPEED_BINS,
-                          gate_col='wind_speed_kmh_max', min_gate_speed=3.0):
+                          gate_col='wind_speed_kmh_max', min_gate_speed=2.0):
     """
     Bins readings into n_sectors compass sectors x speed bands, and returns
     per (sector, speed band) the reading count plus cumulative counts for
