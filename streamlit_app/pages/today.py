@@ -1,5 +1,7 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
+import altair as alt
 import utils
 import os
 
@@ -10,12 +12,30 @@ discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
 
 st.title("Dashboard Today")
-utils.show_last_datapoint_caption(df)
 
-# #--------------------- sunset and sunrise -----------------------------
+datapoint_col, refresh_col = st.columns([3, 1], vertical_alignment="center")
+with datapoint_col:
+    utils.show_last_datapoint_caption(df)
+with refresh_col:
+    refresh_clicked = st.button("Refresh Data")
+
+if refresh_clicked:
+    # .clear() occasionally hits Streamlit's cache-storage internals before
+    # they're fully initialized (seen right after a cold start on Streamlit
+    # Cloud) and raises AttributeError. Not clearing is harmless here since
+    # the cache has a 3min TTL anyway, so don't let it crash the page.
+    try:
+        utils.get_data.clear()
+        utils.get_forecast_df.clear()
+    except AttributeError:
+        pass
+    st.success("Data refreshed!")
+
+# #--------------------- sunset/sunrise and moonrise/moonset -----------------------------
 sunrise_str, sunset_str = utils.get_sunrise_sunset()
+moonrise_str, moonset_str = utils.get_moonrise_moonset()
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     icon_col, text_col = st.columns([1, 3])
@@ -25,6 +45,13 @@ with col1:
     with text_col:
         st.markdown(f"**Sunrise**<br>{sunrise_str}", unsafe_allow_html=True)
 
+    icon_col, text_col = st.columns([1, 3])
+    with icon_col:
+        img_path = os.path.join(asset_path, 'moonrise.png')
+        st.image(img_path, width=50)
+    with text_col:
+        st.markdown(f"**Moonrise**<br> {moonrise_str}", unsafe_allow_html=True)
+
 with col2:
     icon_col, text_col = st.columns([1, 3])
     with icon_col:
@@ -33,7 +60,14 @@ with col2:
     with text_col:
         st.markdown(f"**Sunset**<br>{sunset_str}", unsafe_allow_html=True)
 
-# --- Solar Noon ---
+    icon_col, text_col = st.columns([1, 3])
+    with icon_col:
+        img_path = os.path.join(asset_path, 'moonset.png')
+        st.image(img_path, width=50)
+    with text_col:
+        st.markdown(f"**Moonset**<br> {moonset_str}", unsafe_allow_html=True)
+
+# --- Solar Noon / Moon Phase ---
 with col3:
     icon_col, text_col = st.columns([1, 3])
     with icon_col:
@@ -46,14 +80,12 @@ with col3:
             unsafe_allow_html=True
         )
 
-# --- Moon Phase ---
-with col4:
     icon_col, text_col = st.columns([1, 3])
     with icon_col:
-        moonphase_image_filepath, index = utils.get_moonphase_filepath(image_repo=asset_path)
+        moonphase_image_filepath, index, illumination_pct = utils.get_moonphase_filepath(image_repo=asset_path)
         st.image(moonphase_image_filepath, width=50)
     with text_col:
-        st.markdown(f"**Moon**<br> {index}/8", unsafe_allow_html=True)
+        st.markdown(f"**Moon**<br> {index}/8 ({illumination_pct:.0f}% illuminated)", unsafe_allow_html=True)
 
 filtered_df = utils.filter_by_recency(df, window_label="Since Midnight", mode='last_session')
 
@@ -217,6 +249,33 @@ def render_wind_rose_section(title, speed_col):
 
 render_wind_rose_section("Wind average", "wind_speed_kmh_avg")
 render_wind_rose_section("Wind gusts", "wind_speed_kmh_max")
+
+# #--------------------- precipitation forecast & radar -----------------------------
+# Sourced from Open-Meteo and RainViewer, not meteo.be/KMI - KMI's terms of
+# use forbid republishing their data on third-party sites.
+st.subheader("Precipitation Forecast")
+precip_df = utils.get_precipitation_forecast()
+if precip_df.empty:
+    st.warning("No forecast data available.")
+else:
+    precip_chart = alt.Chart(precip_df).mark_bar(color="#3B82F6").encode(
+        x=alt.X('received_at:T', title='Time', axis=alt.Axis(format='%H:%M')),
+        y=alt.Y('precipitation_mm:Q', title='mm'),
+        tooltip=[
+            alt.Tooltip('received_at:T', title='Time', format='%d %b %H:%M'),
+            alt.Tooltip('precipitation_mm:Q', title='mm', format='.1f'),
+        ]
+    ).properties(width='container', height=250)
+    st.altair_chart(precip_chart, use_container_width=True)
+st.caption("Source: Open-Meteo")
+
+st.subheader("Rain Radar")
+radar_html = utils.render_radar_map_html()
+if radar_html is None:
+    st.warning("Radar data unavailable.")
+else:
+    components.html(radar_html, height=460)
+st.caption("Source: RainViewer")
 
 st.markdown(
     """

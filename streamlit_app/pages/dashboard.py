@@ -7,7 +7,6 @@ import altair as alt
 import numpy as np
 import os
 from streamlit_gsheets import GSheetsConnection
-from datetime import datetime
 
 debug = 0
 cached_time = 0
@@ -44,26 +43,15 @@ discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
 
-# #--------------------- current date -----------------------------
-# 1. Get the current date
-now = datetime.now()
-
-# 2. Format it (e.g., Wednesday, June 4)
-# %A = Weekday, %B = Month, %d = Day
-date_string = now.strftime("%A, %B %d")
-
-# 3. Display it in Streamlit
 st.header('Affligem, Belgium')
 
-date_col, last_dp_col = st.columns([1, 1])
-with date_col:
-    st.write(date_string)
-with last_dp_col:
+datapoint_col, refresh_col = st.columns([3, 1], vertical_alignment="center")
+with datapoint_col:
     utils.show_last_datapoint_caption(df)
+with refresh_col:
+    refresh_clicked = st.button("Refresh Data")
 
-# #--------------------- button for time window -----------------------------
-
-if st.button("Refresh Data"):
+if refresh_clicked:
     # .clear() occasionally hits Streamlit's cache-storage internals before
     # they're fully initialized (seen right after a cold start on Streamlit
     # Cloud) and raises AttributeError. Not clearing is harmless here since
