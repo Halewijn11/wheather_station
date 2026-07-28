@@ -1,7 +1,5 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
-import altair as alt
 import utils
 import os
 
@@ -249,33 +247,6 @@ def render_wind_rose_section(title, speed_col):
 
 render_wind_rose_section("Wind average", "wind_speed_kmh_avg")
 render_wind_rose_section("Wind gusts", "wind_speed_kmh_max")
-
-# #--------------------- precipitation forecast & radar -----------------------------
-# Sourced from Open-Meteo and RainViewer, not meteo.be/KMI - KMI's terms of
-# use forbid republishing their data on third-party sites.
-st.subheader("Precipitation Forecast")
-precip_df = utils.get_precipitation_forecast()
-if precip_df.empty:
-    st.warning("No forecast data available.")
-else:
-    precip_chart = alt.Chart(precip_df).mark_bar(color="#3B82F6").encode(
-        x=alt.X('received_at:T', title='Time', axis=alt.Axis(format='%H:%M')),
-        y=alt.Y('precipitation_mm:Q', title='mm'),
-        tooltip=[
-            alt.Tooltip('received_at:T', title='Time', format='%d %b %H:%M'),
-            alt.Tooltip('precipitation_mm:Q', title='mm', format='.1f'),
-        ]
-    ).properties(width='container', height=250)
-    st.altair_chart(precip_chart, use_container_width=True)
-st.caption("Source: Open-Meteo")
-
-st.subheader("Rain Radar")
-radar_html = utils.render_radar_map_html()
-if radar_html is None:
-    st.warning("Radar data unavailable.")
-else:
-    components.html(radar_html, height=460)
-st.caption("Source: RainViewer")
 
 st.markdown(
     """
