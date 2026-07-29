@@ -7,9 +7,15 @@ import os
 import pytz
 import calendar
 from datetime import datetime
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(layout="wide")
 st.title("Regen")
+
+# Rerun the page every 60s so it picks up new data as soon as the
+# 3-minute get_data() cache (see utils.py) expires, without needing
+# a manual refresh.
+st_autorefresh(interval=60_000, key="regen_autorefresh")
 
 # Historical monthly totals (mm) from before the sensor's own logging started,
 # transcribed from an older record. '---' months (no data yet, device/station
