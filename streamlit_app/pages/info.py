@@ -33,10 +33,12 @@ Welke resolutie in grafiek wordt getoond hangt af van de span van de geselecteer
 Hoe een datapunt in een grafiek berekend wordt:
 - De meeste kolommen (temperatuur, druk, licht, windsnelheid, ...) worden **gemiddeld** (mean) over alle metingen in het archiefinterval.
 - `rain_mm` en `wind_pulses_total` worden **opgeteld** (sum) i.p.v. gemiddeld, want dat zijn hoeveelheden per interval, geen momentopnames.
+- Alle grfaieken geven de gemiddelde waarde weer van het archive interval, dus gemiddelde over 5 min. ENkel bij de Temp kan je min en max laten tonen
 - De cumulatieve regen wordt opnieuw gereset elke lokale (Europe/Brussels) middernacht.
 - Helderheidsindex = gemeten energie tot nu / TOA-instraling tot nu (numeriek geïntegreerd sinds zonsopgang), als %
-- TOA : Spencer (1971)-benaderingen voor declinatie/excentriciteit        
-            
+- TOA : Spencer (1971)-benaderingen voor declinatie/excentriciteit
+- Heat Index (Grafieken-tab) : NWS-formule (Steadman 1979, Rothfusz-regressie 1990, herzien door NOAA in 1998), berekend uit sht_temperature_avg + sht_humidity_avg. Onder ~26.7°C wordt de eenvoudige middelingsformule gebruikt i.p.v. de volledige regressie (niet betekenisvol/geldig bij lagere temperaturen); erboven de volledige regressie met de officiële correctietermen voor lage (<13%) en hoge (>85%) vochtigheid. Berekening gebeurt intern in °F, weergave in °C.
+
 """)
 
 st.subheader("windroos")
