@@ -53,7 +53,7 @@ df.to_csv('full_data.csv', index=False)
 # df  = pd.read_csv('data.csv')
 
 # --- NEW: Time Window Selection ---
-selected_label = utils.get_shared_time_range_selection("Select Time Range:")
+selected_label = utils.get_shared_time_range_selection("Select Time Range:", df=df)
 
 # Now filter your data using this dynamic variable
 # The function filter_by_recency now supports window_label directly
