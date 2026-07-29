@@ -31,6 +31,11 @@ zon_page = st.Page(
     title="Zon",
     icon=":material/wb_sunny:",
 )
+maandoverzicht_page = st.Page(
+    "pages/maandoverzicht.py",
+    title="Maandoverzicht",
+    icon=":material/calendar_month:",
+)
 status_page = st.Page(
     "pages/status.py",
     title="Status",
@@ -51,7 +56,7 @@ info_page = st.Page(
 # )
 
 # --- NAVIGATION SETUP [WITHOUT SECTIONS] ---
-pg = st.navigation(pages=[today_page, dashboard_page, regen_page, zon_page, overlay_page, status_page, info_page])
+pg = st.navigation(pages=[today_page, dashboard_page, regen_page, zon_page, maandoverzicht_page, overlay_page, status_page, info_page])
 
 # --- RUN NAVIGATION ---
 pg.run()

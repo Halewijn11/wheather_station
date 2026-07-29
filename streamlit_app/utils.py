@@ -451,6 +451,48 @@ def compute_daily_rain(df, year, month, col='rain_mm'):
     return pd.DataFrame(rows)
 
 
+def compute_daily_temperature_stats(df, year, month, avg_col='sht_temperature_avg'):
+    """
+    Per calendar day (Europe/Brussels local) in the given year/month: the
+    mean, max and min of the avg column (itself already a 5-min average,
+    per record) across that day's records - i.e. the day's highest/lowest/
+    mean 5-min-averaged reading, not a separate raw max/min column. Days
+    with no data get NaN (there's no sensible zero-fallback for a
+    temperature reading).
+    Returns a DataFrame with one row per day: date, day, avg_avg, avg_max,
+    avg_min, has_data, is_partial (True for today, if within the month).
+    """
+    tz = pytz.timezone('Europe/Brussels')
+    days_in_month = calendar.monthrange(year, month)[1]
+    today_local_date = datetime.now(tz).date()
+    month_start = pd.Timestamp(year, month, 1).date()
+    month_end = pd.Timestamp(year, month, days_in_month).date()
+
+    if not df.empty and avg_col in df.columns:
+        work = df.dropna(subset=['received_at']).copy()
+        work['local_date'] = work['received_at'].dt.tz_convert(tz).dt.date
+        work = work[(work['local_date'] >= month_start) & (work['local_date'] <= month_end)]
+        daily_stats = work.groupby('local_date')[avg_col].agg(['mean', 'max', 'min'])
+    else:
+        daily_stats = pd.DataFrame(columns=['mean', 'max', 'min'])
+
+    rows = []
+    for day in range(1, days_in_month + 1):
+        date = pd.Timestamp(year, month, day).date()
+        has_data = date in daily_stats.index
+        row_vals = daily_stats.loc[date] if has_data else None
+        rows.append({
+            'date': date,
+            'day': day,
+            'avg_avg': float(row_vals['mean']) if has_data and pd.notna(row_vals['mean']) else float('nan'),
+            'avg_max': float(row_vals['max']) if has_data and pd.notna(row_vals['max']) else float('nan'),
+            'avg_min': float(row_vals['min']) if has_data and pd.notna(row_vals['min']) else float('nan'),
+            'has_data': has_data,
+            'is_partial': date == today_local_date,
+        })
+    return pd.DataFrame(rows)
+
+
 def filter_data(df, window_hours=1, mode='live'):
     if df.empty:
         return df
