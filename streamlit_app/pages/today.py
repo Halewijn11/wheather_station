@@ -2,6 +2,12 @@ import streamlit as st
 import pandas as pd
 import utils
 import os
+from streamlit_autorefresh import st_autorefresh
+
+# Rerun the page every 60s so it picks up new data as soon as the
+# 3-minute get_data() cache (see utils.py) expires, without needing
+# a manual "Refresh Data" click.
+st_autorefresh(interval=60_000, key="today_autorefresh")
 
 current_dir = os.path.dirname(__file__)
 asset_path = os.path.join(current_dir, "..", "assets")
@@ -159,6 +165,7 @@ with sun_gauge_col:
             step=100, label_every=2,
             track_color="#FEF3C7", fill_color="#F59E0B",
             marker_value=toa_stats['toa_now_w_m2'], marker_color="#DC2626",
+            marker2_value=toa_stats['toa_now_w_m2'] * 0.8, marker2_color="#16A34A",
             width=300, height=225
         ),
         unsafe_allow_html=True

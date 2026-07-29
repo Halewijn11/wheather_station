@@ -6,10 +6,16 @@ from streamlit_extras.metric_cards import style_metric_cards
 import os
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
+from streamlit_autorefresh import st_autorefresh
 
 
 
 st.title("Status")
+
+# Rerun the page every 60s so it picks up new data as soon as the
+# 3-minute get_data() cache (see utils.py) expires, without needing
+# a manual refresh.
+st_autorefresh(interval=60_000, key="status_autorefresh")
 
 current_dir = os.path.dirname(__file__)
 asset_path = os.path.join(current_dir, "..", "assets")

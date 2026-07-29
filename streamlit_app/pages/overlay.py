@@ -2,8 +2,14 @@ import streamlit as st
 import pandas as pd
 import utils
 import os
+from streamlit_autorefresh import st_autorefresh
 
 st.title("Overlay")
+
+# Rerun the page every 60s so it picks up new data as soon as the
+# 3-minute get_data() cache (see utils.py) expires, without needing
+# a manual refresh.
+st_autorefresh(interval=60_000, key="overlay_autorefresh")
 
 current_dir = os.path.dirname(__file__)
 asset_path = os.path.join(current_dir, "..", "assets")

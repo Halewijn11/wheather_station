@@ -6,6 +6,8 @@ from streamlit_autorefresh import st_autorefresh
 import altair as alt
 import numpy as np
 import os
+import pytz
+from datetime import datetime
 from streamlit_gsheets import GSheetsConnection
 
 debug = 0
@@ -48,6 +50,8 @@ st.header('Affligem, Belgium')
 datapoint_col, refresh_col = st.columns([3, 1], vertical_alignment="center")
 with datapoint_col:
     utils.show_last_datapoint_caption(df)
+    now_local = datetime.now(pytz.timezone('Europe/Brussels'))
+    st.caption(f"Last refresh: {now_local.strftime('%d %b %H:%M:%S')}")
 with refresh_col:
     refresh_clicked = st.button("Refresh Data")
 

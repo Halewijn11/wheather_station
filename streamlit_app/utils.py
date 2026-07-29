@@ -1461,7 +1461,8 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
                          track_color="#DBEAFE", fill_color="#2563EB",
                          needle_color="#3d3a2a", muted_color="#898781",
                          width=320, height=240, gradient_colors=None, tick_values=None,
-                         marker_value=None, marker_color="#3d3a2a"):
+                         marker_value=None, marker_color="#3d3a2a",
+                         marker2_value=None, marker2_color="#16A34A"):
     """
     Renders a semi-circular analog gauge (barometer-style) as an SVG string.
     value is clamped to [min_val, max_val] for the needle/arc; the raw value is
@@ -1477,10 +1478,10 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
     spaced) - overrides the uniform step/label_every tick generation, with
     every listed value labeled.
 
-    marker_value: optional single value to mark with a small triangle just
-    outside the arc, independent of tick_values - e.g. a reference threshold
-    (like standard sea-level pressure) that stays marked even if its number
-    isn't shown as a tick label.
+    marker_value / marker2_value: optional values to mark with a small
+    triangle just outside the arc, independent of tick_values - e.g. a
+    reference threshold (like standard sea-level pressure) that stays
+    marked even if its number isn't shown as a tick label.
     """
     if value is None or pd.isna(value):
         return ""
@@ -1550,9 +1551,10 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
     # Optional reference-threshold marker: a small triangle pointing at the
     # arc, independent of tick_values - stays put even if that value isn't
     # shown as a numbered tick.
-    marker_svg = ""
-    if marker_value is not None and min_val <= marker_value <= max_val:
-        marker_angle = 180 - ((marker_value - min_val) / (max_val - min_val)) * 180
+    def _marker_triangle(marker_val, color):
+        if marker_val is None or not (min_val <= marker_val <= max_val):
+            return ""
+        marker_angle = 180 - ((marker_val - min_val) / (max_val - min_val)) * 180
         apex_x, apex_y = point(marker_angle, r + stroke_w / 2 + 1 * scale)
         base_x, base_y = point(marker_angle, r + stroke_w / 2 + 9 * scale)
         mdx, mdy = apex_x - base_x, apex_y - base_y
@@ -1562,10 +1564,12 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
         marker_half_w = 4 * scale
         mleft_x, mleft_y = base_x + mperp_x * marker_half_w, base_y + mperp_y * marker_half_w
         mright_x, mright_y = base_x - mperp_x * marker_half_w, base_y - mperp_y * marker_half_w
-        marker_svg = (
+        return (
             f'<polygon points="{apex_x:.2f},{apex_y:.2f} {mleft_x:.2f},{mleft_y:.2f} {mright_x:.2f},{mright_y:.2f}" '
-            f'fill="{marker_color}"/>'
+            f'fill="{color}"/>'
         )
+
+    marker_svg = _marker_triangle(marker_value, marker_color) + _marker_triangle(marker2_value, marker2_color)
 
     # Needle (drawn as a tapered arrow/dart shape rather than a plain line).
     # Reaches the outer edge of the color band (the arc is stroked around r
