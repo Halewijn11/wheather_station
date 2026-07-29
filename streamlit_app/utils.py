@@ -860,7 +860,12 @@ def get_moonphase_filepath(image_repo = './'):
     diff = datetime.now() - datetime(2000, 1, 6, 18, 14)
     days = diff.total_seconds() / 86400
     lunation = days % 29.530588853
-    phase_index = int((lunation / 29.53) * 8) % 8
+    # round() (not floor/int) so each of the 8 phase buckets is centered on
+    # its canonical instant (e.g. "full_moon" spans the ~3.7 days around
+    # 100% illumination) instead of starting there - otherwise the days
+    # just before an exact full/new moon would show ~100%/~0% illumination
+    # under the wrong (waxing/waning) label.
+    phase_index = round((lunation / 29.530588853) * 8) % 8
 
     # Fraction of the disk illuminated, 0% at new moon, 100% at full moon.
     illumination_pct = (1 - np.cos(2 * np.pi * lunation / 29.530588853)) / 2 * 100
