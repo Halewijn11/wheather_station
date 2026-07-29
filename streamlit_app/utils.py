@@ -193,6 +193,44 @@ def value_at_offset(frame, col, seconds_ago, time_colname='seconds_since_now'):
     return valid.loc[idx, col], valid.loc[idx, "received_at"]
 
 
+def compute_heat_index_series(temp_c, rh_pct):
+    """
+    NWS heat index (Steadman 1979, Rothfusz 1990 regression, as revised/
+    documented by NOAA in 1998): perceived temperature combining air
+    temperature and relative humidity. Formula is defined in °F, so inputs
+    are converted in and the result is converted back to °C.
+
+    Below ~26.7°C (80°F) the NWS falls back to a simpler averaging formula
+    (the full regression isn't valid/meaningful down there); above that,
+    the full regression is used, with the official low-humidity (<13%)
+    and high-humidity (>85%) correction terms applied where they apply.
+    """
+    temp_f = temp_c * 9 / 5 + 32
+    rh = rh_pct
+
+    simple_hi = 0.5 * (temp_f + 61.0 + ((temp_f - 68.0) * 1.2) + (rh * 0.094))
+    use_full = ((simple_hi + temp_f) / 2) >= 80.0
+
+    full_hi = (
+        -42.379 + 2.04901523 * temp_f + 10.14333127 * rh - 0.22475541 * temp_f * rh
+        - 0.00683783 * temp_f * temp_f - 0.05481717 * rh * rh
+        + 0.00122874 * temp_f * temp_f * rh + 0.00085282 * temp_f * rh * rh
+        - 0.00000199 * temp_f * temp_f * rh * rh
+    )
+
+    low_rh_mask = (rh < 13) & (temp_f >= 80) & (temp_f <= 112)
+    low_rh_adj = ((13 - rh) / 4.0) * np.sqrt((17 - np.abs(temp_f - 95.0)) / 17.0)
+    full_hi = np.where(low_rh_mask, full_hi - low_rh_adj, full_hi)
+
+    high_rh_mask = (rh > 85) & (temp_f >= 80) & (temp_f <= 87)
+    high_rh_adj = ((rh - 85) / 10.0) * ((87 - temp_f) / 5.0)
+    full_hi = np.where(high_rh_mask, full_hi + high_rh_adj, full_hi)
+
+    hi_f = np.where(use_full, full_hi, simple_hi)
+    hi_c = (hi_f - 32) * 5 / 9
+    return pd.Series(hi_c, index=temp_c.index) if hasattr(temp_c, 'index') else hi_c
+
+
 def compute_todays_solar_energy(df, col='light_intensity_avg', interval_minutes=5):
     """
     Rough estimate of today's solar irradiation energy per m², integrating the
@@ -1025,6 +1063,14 @@ def day_boundary_chart(day_boundaries_df, x_col='received_at'):
     ).encode(x=alt.X(f"{x_col}:T"))
 
 
+def local_time_str(ts):
+    """Formats a (tz-aware or naive UTC) timestamp as HH:MM in Europe/Brussels time."""
+    ts = pd.Timestamp(ts)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize('UTC')
+    return ts.tz_convert('Europe/Brussels').strftime('%H:%M')
+
+
 class TimeSeriesDashboardItem:
     """
     Represent a metric card with an associated time-series plot.
@@ -1066,7 +1112,7 @@ class TimeSeriesDashboardItem:
                              var_name='Variable', value_name='Value')
         return melted, labels, colors
 
-    def plot(self, df, x_col='received_at', height=280, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None, min_max_df=None, min_col=None, max_col=None, show_metric=True, compare_val=None, compare_label=None, window_label=None, extra_controls=None, show_max_line=True, max_line_col=None, max_line_label="max", show_min_line=False, min_line_col=None, min_line_label="min"):
+    def plot(self, df, x_col='received_at', height=280, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None, min_max_df=None, min_col=None, max_col=None, show_metric=True, compare_val=None, compare_label=None, window_label=None, extra_controls=None, show_max_line=True, max_line_col=None, max_line_label="max", show_min_line=False, min_line_col=None, min_line_label="min", extra_metric_caption=None):
         if df.empty:
             st.warning(f"No data for {self.metric_title}")
             return
@@ -1077,12 +1123,6 @@ class TimeSeriesDashboardItem:
             with col1:
                 st.metric(self.metric_title, f"{latest_val:{format}} {self.unit}")
 
-                if min_max_df is not None and not min_max_df.empty and min_col and max_col:
-                    min_val = min_max_df[min_col].min()
-                    max_val = min_max_df[max_col].max()
-                    if pd.notna(min_val) and pd.notna(max_val):
-                        st.caption(f"min {min_val:{format}}{self.unit} · max {max_val:{format}}{self.unit}")
-
                 if compare_val is not None and pd.notna(compare_val):
                     delta = latest_val - compare_val
                     arrow = "▲" if delta > 0 else ("▼" if delta < 0 else "▶")
@@ -1092,6 +1132,11 @@ class TimeSeriesDashboardItem:
                         f"<span style='color:{arrow_color}'>{arrow}</span>",
                         unsafe_allow_html=True
                     )
+
+                if extra_metric_caption:
+                    captions = [extra_metric_caption] if isinstance(extra_metric_caption, str) else extra_metric_caption
+                    for caption in captions:
+                        st.caption(caption, unsafe_allow_html=True)
         else:
             col2 = st.container()
 
@@ -1187,11 +1232,17 @@ class TimeSeriesDashboardItem:
             # (raw, unresampled data) when available, so the line agrees with the
             # min/max caption in the metric column instead of a resampled mean.
             if show_max_line and min_max_df is not None and not min_max_df.empty and max_col:
-                main_max = min_max_df[max_col].max()
+                main_max_idx = min_max_df[max_col].idxmax()
+                main_max = min_max_df.loc[main_max_idx, max_col]
+                main_max_time = min_max_df.loc[main_max_idx, x_col]
             elif show_max_line:
-                main_max = df[max_line_col or self.y_col_main].max()
+                max_series = df[max_line_col or self.y_col_main]
+                main_max_idx = max_series.idxmax()
+                main_max = max_series.loc[main_max_idx] if pd.notna(main_max_idx) else None
+                main_max_time = df.loc[main_max_idx, x_col] if pd.notna(main_max_idx) else None
             else:
                 main_max = None
+                main_max_time = None
             max_line = None
             max_label = None
             if pd.notna(main_max):
@@ -1200,10 +1251,14 @@ class TimeSeriesDashboardItem:
                     color='#EF4444', strokeDash=[4, 4], strokeWidth=1, opacity=0.6
                 ).encode(y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)))
 
+                max_label_text = f"{max_line_label} {main_max:{format}}{self.unit}"
+                if pd.notna(main_max_time):
+                    max_label_text += f" at {local_time_str(main_max_time)}"
+
                 max_label_df = pd.DataFrame({
                     x_col: [df[x_col].min()],
                     'y': [main_max],
-                    'label': [f"{max_line_label} {main_max:{format}}{self.unit}"],
+                    'label': [max_label_text],
                 })
                 max_label = alt.Chart(max_label_df).mark_text(
                     align='left', baseline='bottom', dy=-2, color='#EF4444', fontSize=11
@@ -1218,11 +1273,17 @@ class TimeSeriesDashboardItem:
             # (raw, unresampled data) when available, so the line agrees with the
             # min/max caption in the metric column instead of a resampled mean.
             if show_min_line and min_max_df is not None and not min_max_df.empty and min_col:
-                main_min = min_max_df[min_col].min()
+                main_min_idx = min_max_df[min_col].idxmin()
+                main_min = min_max_df.loc[main_min_idx, min_col]
+                main_min_time = min_max_df.loc[main_min_idx, x_col]
             elif show_min_line:
-                main_min = df[min_line_col or self.y_col_main].min()
+                min_series = df[min_line_col or self.y_col_main]
+                main_min_idx = min_series.idxmin()
+                main_min = min_series.loc[main_min_idx] if pd.notna(main_min_idx) else None
+                main_min_time = df.loc[main_min_idx, x_col] if pd.notna(main_min_idx) else None
             else:
                 main_min = None
+                main_min_time = None
             min_line = None
             min_label = None
             if pd.notna(main_min):
@@ -1231,10 +1292,14 @@ class TimeSeriesDashboardItem:
                     color='#3B82F6', strokeDash=[4, 4], strokeWidth=1, opacity=0.6
                 ).encode(y=alt.Y('y:Q', scale=alt.Scale(domain=y_domain, clamp=True)))
 
+                min_label_text = f"{min_line_label} {main_min:{format}}{self.unit}"
+                if pd.notna(main_min_time):
+                    min_label_text += f" at {local_time_str(main_min_time)}"
+
                 min_label_df = pd.DataFrame({
                     x_col: [df[x_col].min()],
                     'y': [main_min],
-                    'label': [f"{min_line_label} {main_min:{format}}{self.unit}"],
+                    'label': [min_label_text],
                 })
                 min_label = alt.Chart(min_label_df).mark_text(
                     align='left', baseline='top', dy=2, color='#3B82F6', fontSize=11
@@ -1498,8 +1563,9 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
         )
 
     # Needle (drawn as a tapered arrow/dart shape rather than a plain line).
-    # Reaches radius r, the center of the ring (the arc is stroked around r).
-    needle_len = r
+    # Reaches the outer edge of the color band (the arc is stroked around r
+    # with width stroke_w, so its outer edge sits at r + stroke_w/2).
+    needle_len = r + stroke_w / 2
     nx, ny = point(value_angle, needle_len)
 
     dx, dy = nx - cx, ny - cy
@@ -1519,8 +1585,8 @@ def render_analog_gauge(value, min_val, max_val, unit="", step=10, label_every=2
      xmlns="http://www.w3.org/2000/svg" role="img"
      aria-label="Gauge, current value {value:.1f} {unit}">
   {gradient_defs}
-  <path d="{track_path}" fill="none" stroke="{track_color}" stroke-width="{stroke_w}" stroke-linecap="round" stroke-opacity="{track_opacity}"/>
-  <path d="{fill_path}" fill="none" stroke="{fill_color}" stroke-width="{stroke_w}" stroke-linecap="round"/>
+  <path d="{track_path}" fill="none" stroke="{track_color}" stroke-width="{stroke_w}" stroke-linecap="butt" stroke-opacity="{track_opacity}"/>
+  <path d="{fill_path}" fill="none" stroke="{fill_color}" stroke-width="{stroke_w}" stroke-linecap="butt"/>
   {''.join(ticks_svg)}
   {marker_svg}
   <polygon points="{base_lx:.2f},{base_ly:.2f} {nx:.2f},{ny:.2f} {base_rx:.2f},{base_ry:.2f}" fill="{needle_color}"/>

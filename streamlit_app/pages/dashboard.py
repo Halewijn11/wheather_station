@@ -90,15 +90,39 @@ time_window_df = utils.resample_data(
 # #--------------------- temperature -----------------------------
 st.subheader("Temperature")
 temp_24h_ago_val, _ = utils.value_at_offset(df, "sht_temperature_avg", 24 * 3600)
+humidity_24h_ago_val, _ = utils.value_at_offset(df, "sht_humidity_avg", 24 * 3600)
 
 # Read toggle state up front to decide which series to add; the checkboxes
 # themselves are declared later, via extra_controls, inside the chart's
 # second column (above the chart).
 show_temp_max = st.session_state.get("temp_show_max", False)
 show_temp_min = st.session_state.get("temp_show_min", False)
+show_heat_index = st.session_state.get("temp_show_heat_index", False)
+
+current_temp = None
+current_heat_index = None
+heat_index_24h_ago_val = None
+if not time_window_df.empty:
+    current_temp = time_window_df["sht_temperature_avg"].iloc[-1]
+    time_window_df["heat_index_avg"] = utils.compute_heat_index_series(
+        time_window_df["sht_temperature_avg"], time_window_df["sht_humidity_avg"]
+    )
+    current_heat_index = time_window_df["heat_index_avg"].iloc[-1]
+    if pd.notna(current_heat_index) and temp_24h_ago_val is not None and humidity_24h_ago_val is not None:
+        heat_index_24h_ago_val = utils.compute_heat_index_series(temp_24h_ago_val, humidity_24h_ago_val)
+
+
+def _delta_caption(current_val, ago_val, label):
+    if current_val is None or ago_val is None or pd.isna(current_val) or pd.isna(ago_val):
+        return None
+    delta = current_val - ago_val
+    arrow = "▲" if delta > 0 else ("▼" if delta < 0 else "▶")
+    arrow_color = "#16A34A" if delta > 0 else ("#DC2626" if delta < 0 else "#6B7280")
+    return f"{label} {delta:+.1f}°C <span style='color:{arrow_color}'>{arrow}</span>"
+
 
 temp_chart = utils.TimeSeriesDashboardItem(
-    metric_title="Current",
+    metric_title="Current T",
     unit="°C",
     y_col_main="sht_temperature_avg",
     y_col_main_label="average",
@@ -108,19 +132,38 @@ if show_temp_max:
     temp_chart.add_extra_series(col_name="sht_temperature_max", label="max", color="#16A34A")
 if show_temp_min:
     temp_chart.add_extra_series(col_name="sht_temperature_min", label="min", color="#DC2626")
+if show_heat_index:
+    temp_chart.add_extra_series(col_name="heat_index_avg", label="heat index", color="#EA580C")
 
 def _render_temp_toggles():
-    temp_toggle_max, temp_toggle_min = st.columns(2)
+    temp_toggle_max, temp_toggle_min, temp_toggle_hi = st.columns(3)
     with temp_toggle_max:
         st.checkbox("Max", value=show_temp_max, key="temp_show_max")
     with temp_toggle_min:
         st.checkbox("Min", value=show_temp_min, key="temp_show_min")
+    with temp_toggle_hi:
+        st.checkbox("Heat Index", value=show_heat_index, key="temp_show_heat_index")
 
-temp_chart.plot(time_window_df, prediction_df=forecast_df, prediction_col='temp',
-                 min_max_df=filtered_df, min_col='sht_temperature_avg', max_col='sht_temperature_avg',
-                 compare_val=temp_24h_ago_val, compare_label="24h ago",
-                 extra_controls=_render_temp_toggles, max_line_label="max avg",
-                 show_min_line=True, min_line_label="min avg")
+temp_metric_col, temp_chart_col = st.columns([1, 2])
+with temp_metric_col:
+    if current_temp is not None and pd.notna(current_temp):
+        st.metric("Current T", f"{current_temp:.1f} °C")
+        temp_delta_caption = _delta_caption(current_temp, temp_24h_ago_val, "24h ago")
+        if temp_delta_caption:
+            st.caption(temp_delta_caption, unsafe_allow_html=True)
+
+    if current_heat_index is not None and pd.notna(current_heat_index):
+        st.metric("Current Heat Index", f"{current_heat_index:.1f} °C")
+        hi_delta_caption = _delta_caption(current_heat_index, heat_index_24h_ago_val, "24h ago")
+        if hi_delta_caption:
+            st.caption(hi_delta_caption, unsafe_allow_html=True)
+
+with temp_chart_col:
+    temp_chart.plot(time_window_df, prediction_df=forecast_df, prediction_col='temp',
+                     min_max_df=filtered_df, min_col='sht_temperature_avg', max_col='sht_temperature_avg',
+                     extra_controls=_render_temp_toggles, max_line_label="max",
+                     show_min_line=True, min_line_label="min",
+                     show_metric=False)
 
 # #--------------------- humidity -----------------------------
 st.subheader("Humidity")
@@ -130,11 +173,15 @@ utils.TimeSeriesDashboardItem(
     y_col_main="sht_humidity_avg",
     y_col_main_label="average",
     main_color="#2563EB" # Blue
-).plot(time_window_df, format=".0f", prediction_df=forecast_df, prediction_col='humidity', max_line_label="max avg",
-       show_min_line=True, min_line_label="min avg")
+).plot(time_window_df, format=".0f", prediction_df=forecast_df, prediction_col='humidity', max_line_label="max",
+       show_min_line=True, min_line_label="min")
 
  # #--------------------- pressure -----------------------------
 st.subheader("Pressure")
+pressure_24h_ago_val, _ = utils.value_at_offset(df, "bmp_pressure_avg", 24 * 3600)
+if pressure_24h_ago_val is not None:
+    pressure_24h_ago_val = pressure_24h_ago_val / 100
+
 if not time_window_df.empty:
     time_window_df["bmp_pressure_avg"] = time_window_df["bmp_pressure_avg"] / 100
     if "bmp_pressure_min" in time_window_df.columns:
@@ -147,8 +194,9 @@ if not time_window_df.empty:
         unit="hPa",
         y_col_main="bmp_pressure_avg",
         main_color="#2563EB" # Blue
-    ).plot(time_window_df, format=".1f", prediction_df=forecast_df, prediction_col='pressure', max_line_label="max avg",
-           show_min_line=True, min_line_label="min avg")
+    ).plot(time_window_df, format=".1f", prediction_df=forecast_df, prediction_col='pressure', max_line_label="max",
+           show_min_line=True, min_line_label="min",
+           compare_val=pressure_24h_ago_val, compare_label="24h ago")
 
  # #--------------------- light intensity -----------------------------
 st.subheader("Light intensity")
@@ -166,7 +214,7 @@ else:
         st.metric("Current", f"{latest_light_val:.1f} W/m²")
 
         energy_kwh, energy_mj = utils.compute_todays_solar_energy(df, col=light_avg_col)
-        st.caption(f"Energie vandaag (schatting): {energy_kwh:.2f} kWh/m² · {energy_mj:.1f} MJ/m²")
+        st.caption(f"Energie vandaag: {energy_kwh:.2f} kWh/m² ")
 
     with col2:
         time_window_df = time_window_df.copy()

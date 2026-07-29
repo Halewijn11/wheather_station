@@ -155,9 +155,10 @@ sun_gauge_col, sun_col2, sun_col3 = st.columns([1.8, 1, 1])
 with sun_gauge_col:
     st.markdown(
         utils.render_analog_gauge(
-            sun_stats['current'], min_val=0, max_val=1000, unit="W/m²",
+            sun_stats['current'], min_val=0, max_val=1200, unit="W/m²",
             step=100, label_every=2,
             track_color="#FEF3C7", fill_color="#F59E0B",
+            marker_value=toa_stats['toa_now_w_m2'], marker_color="#DC2626",
             width=300, height=225
         ),
         unsafe_allow_html=True
