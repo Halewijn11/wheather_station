@@ -47,11 +47,21 @@ df = utils.get_data(discharge_curve)
 
 st.header('Affligem, Belgium')
 
-datapoint_col, refresh_col = st.columns([3, 1], vertical_alignment="center")
+try:
+    ventilator_df = utils.get_ventilator_data()
+except Exception:
+    ventilator_df = pd.DataFrame()
+
+datapoint_col, rpm_col, refresh_col = st.columns([2, 2, 1], vertical_alignment="top")
 with datapoint_col:
     utils.show_last_datapoint_caption(df)
     now_local = datetime.now(pytz.timezone('Europe/Brussels'))
     st.caption(f"Last refresh: {now_local.strftime('%d %b %H:%M:%S')}")
+with rpm_col:
+    if not ventilator_df.empty:
+        latest_rpm = ventilator_df["rpm"].iloc[-1]
+        latest_rpm_time = ventilator_df["received_at"].iloc[-1]
+        st.caption(f"Last Fan RPM: {latest_rpm:.0f} at {utils.local_datetime_str(latest_rpm_time)}")
 with refresh_col:
     refresh_clicked = st.button("Refresh Data")
 
