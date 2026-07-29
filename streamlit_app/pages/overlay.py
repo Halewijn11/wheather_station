@@ -19,7 +19,7 @@ df = utils.get_data(discharge_curve)
 utils.show_last_datapoint_caption(df)
 st.caption("Alle grafieken over elkaar, elke reeks genormaliseerd naar 0-100% van haar eigen bereik. Echte waarden blijven zichtbaar via de tooltip.")
 
-selected_label = utils.get_shared_time_range_selection("Select Time Range:")
+selected_label = utils.get_shared_time_range_selection("Select Time Range:", df=df)
 
 filtered_df = utils.filter_by_recency(df, window_label=selected_label, mode='last_session')
 time_window_df = utils.resample_data(filtered_df, sum_cols=['rain_mm'])

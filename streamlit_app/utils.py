@@ -18,6 +18,8 @@ from urllib.request import urlopen
 from pandas.tseries.frequencies import to_offset
 
 CUSTOM_RANGE_LABEL = "Custom Range"
+SPECIFIC_MONTH_LABEL = "Specific Month"
+SPECIFIC_DAY_LABEL = "Specific Day"
 TIME_OPTIONS = [
     "Last Hour",
     "Last 24 Hours",
@@ -25,6 +27,8 @@ TIME_OPTIONS = [
     "Since Midnight",
     "This Week",
     "This Month",
+    SPECIFIC_DAY_LABEL,
+    SPECIFIC_MONTH_LABEL,
     CUSTOM_RANGE_LABEL,
 ]
 DEFAULT_TIME_RANGE = "Since Midnight"
@@ -44,8 +48,15 @@ CUSTOM_RANGE_FROM_KEY = "custom_range_from_dt"
 CUSTOM_RANGE_TO_KEY = "custom_range_to_dt"
 CUSTOM_RANGE_VALID_KEY = "custom_range_valid"
 
+# Shared (cross-page) storage for the Specific Month picker.
+SPECIFIC_MONTH_YEAR_KEY = "specific_month_year"
+SPECIFIC_MONTH_MONTH_KEY = "specific_month_month"
 
-def get_shared_time_range_selection(label="Select Time Range:"):
+# Shared (cross-page) storage for the Specific Day picker.
+SPECIFIC_DAY_KEY = "specific_day_date"
+
+
+def get_shared_time_range_selection(label="Select Time Range:", df=None):
     # Persist one stable value in session state and rehydrate the widget from it.
     # This avoids page-switch widget cleanup resetting the selected option.
     if TIME_RANGE_STATE_KEY not in st.session_state or st.session_state[TIME_RANGE_STATE_KEY] not in TIME_OPTIONS:
@@ -61,8 +72,55 @@ def get_shared_time_range_selection(label="Select Time Range:"):
 
     if selected == CUSTOM_RANGE_LABEL:
         _render_custom_range_pickers()
+    elif selected == SPECIFIC_MONTH_LABEL:
+        _render_specific_month_pickers(df)
+    elif selected == SPECIFIC_DAY_LABEL:
+        _render_specific_day_picker()
 
     return selected
+
+
+def _render_specific_day_picker():
+    """Renders the date picker for Specific Day and stores the selection in
+    session state, shared across pages like the label itself."""
+    tz = pytz.timezone('Europe/Brussels')
+    today_local = datetime.now(tz).date()
+
+    default_day = st.session_state.get(SPECIFIC_DAY_KEY, today_local)
+    selected_day = st.date_input("Day", value=default_day, max_value=today_local)
+
+    st.session_state[SPECIFIC_DAY_KEY] = selected_day
+
+
+def _render_specific_month_pickers(df):
+    """Renders the Year/Month pickers for Specific Month and stores the
+    selection in session state, shared across pages like the label itself."""
+    tz = pytz.timezone('Europe/Brussels')
+    now_local = datetime.now(tz)
+
+    years = None
+    if df is not None and not df.empty and 'received_at' in df.columns:
+        years = sorted(df['received_at'].dt.tz_convert(tz).dt.year.unique().tolist())
+    if not years:
+        years = [now_local.year]
+
+    default_year = st.session_state.get(SPECIFIC_MONTH_YEAR_KEY, now_local.year)
+    if default_year not in years:
+        default_year = years[-1]
+    default_month = st.session_state.get(SPECIFIC_MONTH_MONTH_KEY, now_local.month)
+
+    year_col, month_col = st.columns(2)
+    with year_col:
+        selected_year = st.selectbox("Year", years, index=years.index(default_year))
+    with month_col:
+        selected_month = st.selectbox(
+            "Month", list(range(1, 13)),
+            format_func=lambda m: calendar.month_name[m],
+            index=default_month - 1,
+        )
+
+    st.session_state[SPECIFIC_MONTH_YEAR_KEY] = selected_year
+    st.session_state[SPECIFIC_MONTH_MONTH_KEY] = selected_month
 
 
 def _render_custom_range_pickers():
@@ -139,6 +197,32 @@ def filter_by_recency(df, window_label=None, hours=0, minutes=0, seconds=0,
         start_utc = pd.Timestamp(st.session_state[CUSTOM_RANGE_FROM_KEY]).tz_convert('UTC')
         end_utc = pd.Timestamp(st.session_state[CUSTOM_RANGE_TO_KEY]).tz_convert('UTC')
         mask = (df['received_at'] >= start_utc) & (df['received_at'] <= end_utc)
+        return df.loc[mask].copy()
+
+    # 0b. Specific Month: filter to the calendar month chosen via the
+    # Year/Month pickers, same absolute-bounds approach as Custom Range.
+    if window_label == SPECIFIC_MONTH_LABEL:
+        year = st.session_state.get(SPECIFIC_MONTH_YEAR_KEY, now.year)
+        month = st.session_state.get(SPECIFIC_MONTH_MONTH_KEY, now.month)
+        start_local = tz.localize(datetime(year, month, 1))
+        if month == 12:
+            end_local = tz.localize(datetime(year + 1, 1, 1))
+        else:
+            end_local = tz.localize(datetime(year, month + 1, 1))
+        start_utc = start_local.astimezone(pytz.UTC)
+        end_utc = end_local.astimezone(pytz.UTC)
+        mask = (df['received_at'] >= start_utc) & (df['received_at'] < end_utc)
+        return df.loc[mask].copy()
+
+    # 0c. Specific Day: filter to the single calendar day chosen via the
+    # date picker, same absolute-bounds approach as Custom Range.
+    if window_label == SPECIFIC_DAY_LABEL:
+        day = st.session_state.get(SPECIFIC_DAY_KEY, now.date())
+        start_local = tz.localize(datetime(day.year, day.month, day.day))
+        end_local = start_local + timedelta(days=1)
+        start_utc = start_local.astimezone(pytz.UTC)
+        end_utc = end_local.astimezone(pytz.UTC)
+        mask = (df['received_at'] >= start_utc) & (df['received_at'] < end_utc)
         return df.loc[mask].copy()
 
     # 1. Handle semantic window labels
@@ -945,7 +1029,9 @@ def plot_data_altair(df, y_variable_colname, x_variable_colname='received_at',
     )
 
     # 3. Combine into a chart object
-    chart = mark.encode(x=x_axis, y=y_axis).interactive()
+    chart = mark.encode(x=x_axis, y=y_axis).add_params(
+        alt.selection_interval(bind='scales', zoom=False)
+    )
 
     return st.altair_chart(chart, use_container_width=True)
 
@@ -1018,7 +1104,9 @@ def plot_data_altair_hover(df, y_variable_colname, x_variable_colname='received_
     # 6. Layer and Return
     layered_chart = alt.layer(
         main_chart, selectors, points, rules
-    ).properties(width='container').interactive()
+    ).properties(width='container').add_params(
+        alt.selection_interval(bind='scales', zoom=False)
+    )
 
     return st.altair_chart(layered_chart, use_container_width=True)
 
@@ -1076,6 +1164,15 @@ def local_time_str(ts):
     return ts.tz_convert('Europe/Brussels').strftime('%H:%M')
 
 
+def local_datetime_str(ts):
+    """Formats a (tz-aware or naive UTC) timestamp as 'D Mon HH:MM' in Europe/Brussels time."""
+    ts = pd.Timestamp(ts)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize('UTC')
+    local = ts.tz_convert('Europe/Brussels')
+    return f"{local.day} {local.strftime('%b %H:%M')}"
+
+
 class TimeSeriesDashboardItem:
     """
     Represent a metric card with an associated time-series plot.
@@ -1113,18 +1210,21 @@ class TimeSeriesDashboardItem:
             rename_dict[s['col']] = s['label']
         
         df_plot = df_plot.rename(columns=rename_dict)
-        melted = df_plot.melt(id_vars=[x_col], value_vars=labels, 
+        melted = df_plot.melt(id_vars=[x_col], value_vars=labels,
                              var_name='Variable', value_name='Value')
         return melted, labels, colors
 
-    def plot(self, df, x_col='received_at', height=280, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None, min_max_df=None, min_col=None, max_col=None, show_metric=True, compare_val=None, compare_label=None, window_label=None, extra_controls=None, show_max_line=True, max_line_col=None, max_line_label="max", show_min_line=False, min_line_col=None, min_line_label="min", extra_metric_caption=None):
+    def plot(self, df, x_col='received_at', height=280, chart_type='line', y_label=None, y_limits=None, format=".1f", show_dots=False, prediction_df=None, prediction_col=None, y_tick_labels=None, min_max_df=None, min_col=None, max_col=None, show_metric=True, compare_val=None, compare_label=None, window_label=None, extra_controls=None, show_max_line=True, max_line_col=None, max_line_label="max", show_min_line=False, min_line_col=None, min_line_label="min", extra_metric_caption=None, current_val=None):
         if df.empty:
             st.warning(f"No data for {self.metric_title}")
             return
 
         if show_metric:
             col1, col2 = st.columns([1, 2])
-            latest_val = df[self.y_col_main].iloc[-1]
+            # current_val, when given, is the true latest sensor reading from
+            # the full unfiltered data - df here may be resampled/time-range-
+            # filtered, whose last row isn't necessarily "now".
+            latest_val = current_val if current_val is not None else df[self.y_col_main].iloc[-1]
             with col1:
                 st.metric(self.metric_title, f"{latest_val:{format}} {self.unit}")
 
@@ -1161,6 +1261,14 @@ class TimeSeriesDashboardItem:
                 if prediction_df is not None and prediction_col is not None and not prediction_df.empty:
                     y_min = min(y_min, float(prediction_df[prediction_col].min()))
                     y_max = max(y_max, float(prediction_df[prediction_col].max()))
+                # Also widen the domain for the raw (unresampled) reference-line
+                # values, so a spike smoothed away by resampling doesn't clamp
+                # the max/min line (and its label) off the visible chart.
+                if min_max_df is not None and not min_max_df.empty:
+                    if max_col and max_col in min_max_df:
+                        y_max = max(y_max, float(min_max_df[max_col].max()))
+                    if min_col and min_col in min_max_df:
+                        y_min = min(y_min, float(min_max_df[min_col].min()))
                 padding = (y_max - y_min) * 0.1 if y_max != y_min else 1
                 y_domain = [y_min - padding, y_max + padding]
 
@@ -1258,7 +1366,7 @@ class TimeSeriesDashboardItem:
 
                 max_label_text = f"{max_line_label} {main_max:{format}}{self.unit}"
                 if pd.notna(main_max_time):
-                    max_label_text += f" at {local_time_str(main_max_time)}"
+                    max_label_text += f" at {local_datetime_str(main_max_time)}"
 
                 max_label_df = pd.DataFrame({
                     x_col: [df[x_col].min()],
@@ -1299,7 +1407,7 @@ class TimeSeriesDashboardItem:
 
                 min_label_text = f"{min_line_label} {main_min:{format}}{self.unit}"
                 if pd.notna(main_min_time):
-                    min_label_text += f" at {local_time_str(main_min_time)}"
+                    min_label_text += f" at {local_datetime_str(main_min_time)}"
 
                 min_label_df = pd.DataFrame({
                     x_col: [df[x_col].min()],
@@ -1337,7 +1445,9 @@ class TimeSeriesDashboardItem:
 
             chart = alt.layer(*layers).properties(
                 width='container', height=height
-            ).interactive()
+            ).add_params(
+                alt.selection_interval(bind='scales', zoom=False)
+            )
 
             st.altair_chart(chart, use_container_width=True)
 
@@ -1452,7 +1562,9 @@ def plot_normalized_overlay(df, series_config, x_col='received_at', height=420):
     day_lines = day_boundary_chart(get_day_boundaries(df[x_col]), x_col)
     layers = ([day_lines] if day_lines is not None else []) + main_layers + [selectors, rules, hover_points]
 
-    return alt.layer(*layers).properties(width='container', height=height).interactive()
+    return alt.layer(*layers).properties(width='container', height=height).add_params(
+        alt.selection_interval(bind='scales', zoom=False)
+    )
 
 
 import math
