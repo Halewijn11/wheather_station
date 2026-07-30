@@ -52,6 +52,7 @@ try:
 except Exception:
     ventilator_df = pd.DataFrame()
 
+latest_rpm = None
 datapoint_col, rpm_col, refresh_col = st.columns([2, 2, 1], vertical_alignment="top")
 with datapoint_col:
     utils.show_last_datapoint_caption(df)
@@ -141,13 +142,17 @@ def _delta_caption(current_val, ago_val, label):
     return f"{label} {delta:+.1f}°C <span style='color:{arrow_color}'>{arrow}</span>"
 
 
+low_fan_rpm = latest_rpm is not None and pd.notna(latest_rpm) and latest_rpm < 1100
+
 temp_chart = utils.TimeSeriesDashboardItem(
     metric_title="Current T",
     unit="°C",
     y_col_main="sht_temperature_avg",
     y_col_main_label="average",
-    main_color="#2563EB" # Reddish
+    main_color="#DC2626" if low_fan_rpm else "#2563EB"
 )
+if low_fan_rpm:
+    st.caption(f"⚠️ Fan RPM ({latest_rpm:.0f}) is onder de 1100 RPM-drempel.")
 if show_temp_max:
     temp_chart.add_extra_series(col_name="sht_temperature_max", label="max", color="#16A34A")
 if show_temp_min:
