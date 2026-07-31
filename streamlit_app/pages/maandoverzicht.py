@@ -22,6 +22,11 @@ discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
 utils.show_last_datapoint_caption(df)
+st.caption(
+    "Max/Gemiddelde/Min zijn allemaal berekend op de avg-metingen (elk al een "
+    "5-minuten-gemiddelde): het hoogste, het gemiddelde, en het laagste van die dag."
+    "Enkel de windstoot werd berekend op basis van de maximale snelheid in het archive interval(5 min)"
+)
 
 tz = pytz.timezone('Europe/Brussels')
 now_local = datetime.now(tz)
@@ -104,7 +109,47 @@ else:
         )
 
         st.altair_chart(temp_month_chart, use_container_width=True)
-        st.caption(
-            "Max/Gemiddelde/Min zijn allemaal berekend op de avg-metingen (elk al een "
-            "5-minuten-gemiddelde): het hoogste, het gemiddelde, en het laagste van die dag."
+
+    # #--------------------- overzichtstabel -----------------------------
+    st.subheader(f"Overzicht {calendar.month_name[selected_month]} {selected_year}")
+
+    pressure_df = df.copy()
+    if not pressure_df.empty:
+        pressure_df["bmp_pressure_avg"] = pressure_df["bmp_pressure_avg"] / 100
+
+    # (label, source df, column, unit, show_gem, show_min)
+    rows_config = [
+        ("Temperatuur", df, "sht_temperature_avg", "°C", True, True),
+        ("Luchtvochtigheid", df, "sht_humidity_avg", "%", True, True),
+        ("Luchtdruk", pressure_df, "bmp_pressure_avg", "hPa", True, True),
+        ("Zon", df, "light_intensity_avg", "W/m²", True, False),
+        ("Wind", df, "wind_speed_kmh_avg", "km/h", True, False),
+        ("Windstoot", df, "wind_speed_kmh_max", "km/h", False, False),
+    ]
+
+    table_rows = []
+    for label, source_df, col, unit, show_gem, show_min in rows_config:
+        stats = utils.compute_monthly_stats(source_df, selected_year, selected_month, col)
+        max_str = f"{stats['max']:.1f} {unit} ({stats['max_date'].strftime('%d-%m')})" if stats['max'] is not None else "-"
+        min_str = (
+            f"{stats['min']:.1f} {unit} ({stats['min_date'].strftime('%d-%m')})"
+            if show_min and stats['min'] is not None else "-"
         )
+        row = {
+            "Sensor": label,
+            "Gem": f"{stats['mean']:.1f} {unit}" if show_gem and stats['mean'] is not None else "-",
+            "Max": max_str,
+            "Min": min_str,
+        }
+        table_rows.append(row)
+
+    table_df = pd.DataFrame(table_rows).set_index("Sensor")
+    table_df.index.name = None
+    styled_table = table_df.style.set_table_styles([
+        {'selector': 'th, td', 'props': [('border', '2px solid #d3d2ca')]},
+        {'selector': 'th', 'props': [('background-color', '#ecebe3')]},
+    ])
+    st.table(styled_table)
+
+    daily_rain = utils.compute_daily_rain(df, selected_year, selected_month)
+    st.metric("Neerslag totaal", f"{daily_rain['rain_mm'].sum():.1f} mm")
