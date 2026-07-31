@@ -493,6 +493,39 @@ def compute_daily_temperature_stats(df, year, month, avg_col='sht_temperature_av
     return pd.DataFrame(rows)
 
 
+def compute_monthly_stats(df, year, month, col):
+    """
+    Mean, max and min of `col` (typically an *_avg column) across all
+    records in the given year/month (Europe/Brussels local), plus the
+    local date each of the max/min occurred on. Returns a dict with keys
+    mean, max, max_date, min, min_date - all None if there's no data.
+    """
+    tz = pytz.timezone('Europe/Brussels')
+    days_in_month = calendar.monthrange(year, month)[1]
+    month_start = pd.Timestamp(year, month, 1).date()
+    month_end = pd.Timestamp(year, month, days_in_month).date()
+
+    empty_result = {'mean': None, 'max': None, 'max_date': None, 'min': None, 'min_date': None}
+    if df.empty or col not in df.columns:
+        return empty_result
+
+    work = df.dropna(subset=['received_at', col]).copy()
+    work['local_date'] = work['received_at'].dt.tz_convert(tz).dt.date
+    work = work[(work['local_date'] >= month_start) & (work['local_date'] <= month_end)]
+    if work.empty:
+        return empty_result
+
+    max_idx = work[col].idxmax()
+    min_idx = work[col].idxmin()
+    return {
+        'mean': float(work[col].mean()),
+        'max': float(work.loc[max_idx, col]),
+        'max_date': work.loc[max_idx, 'local_date'],
+        'min': float(work.loc[min_idx, col]),
+        'min_date': work.loc[min_idx, 'local_date'],
+    }
+
+
 def filter_data(df, window_hours=1, mode='live'):
     if df.empty:
         return df
