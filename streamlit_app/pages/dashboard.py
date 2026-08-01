@@ -74,6 +74,7 @@ if refresh_clicked:
     try:
         utils.get_data.clear()
         utils.get_forecast_df.clear()
+        utils.get_calibration_log.clear()
     except AttributeError:
         pass
     st.success("Data refreshed!")

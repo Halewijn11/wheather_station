@@ -46,6 +46,17 @@ st.markdown("""
 data worden in windroos pas opgenomen vanaf wind_max 3 km/h en dit voor beide rozen
 """)
 
+st.subheader("Kalibraties")
+st.caption(
+    "Log van sensorkalibraties, handmatig bijgehouden in het 'Kalibraties'-tabblad "
+    "van de Google Sheet (Datum, Kolom, Offset, Notitie)."
+)
+calibration_log = utils.get_calibration_log()
+if calibration_log.empty:
+    st.caption("Nog geen kalibraties gelogd.")
+else:
+    st.dataframe(calibration_log, use_container_width=True, hide_index=True)
+
 # st.markdown("check out this [link](%s)" % url)
 # st.markdown("check out this [link](%s)" % url)
 # """
