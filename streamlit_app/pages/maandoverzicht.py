@@ -25,7 +25,7 @@ utils.show_last_datapoint_caption(df)
 st.caption(
     "Max/Gemiddelde/Min zijn allemaal berekend op de avg-metingen (elk al een "
     "5-minuten-gemiddelde): het hoogste, het gemiddelde, en het laagste van die dag."
-    "Enkel de windstoot werd berekend op basis van de maximale snelheid in het archive interval(5 min)"
+    " Enkel de windstoot werd berekend op basis van de maximale snelheid in het archive interval(5 min)"
 )
 
 tz = pytz.timezone('Europe/Brussels')
@@ -143,6 +143,14 @@ else:
         }
         table_rows.append(row)
 
+    daily_rain = utils.compute_daily_rain(df, selected_year, selected_month)
+    table_rows.append({
+        "Sensor": "Neerslag totaal",
+        "Gem": f"{daily_rain['rain_mm'].sum():.1f} mm",
+        "Max": "-",
+        "Min": "-",
+    })
+
     table_df = pd.DataFrame(table_rows).set_index("Sensor")
     table_df.index.name = None
     styled_table = table_df.style.set_table_styles([
@@ -150,6 +158,3 @@ else:
         {'selector': 'th', 'props': [('background-color', '#ecebe3')]},
     ])
     st.table(styled_table)
-
-    daily_rain = utils.compute_daily_rain(df, selected_year, selected_month)
-    st.metric("Neerslag totaal", f"{daily_rain['rain_mm'].sum():.1f} mm")

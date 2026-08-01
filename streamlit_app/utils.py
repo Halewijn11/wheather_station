@@ -542,10 +542,64 @@ def filter_data(df, window_hours=1, mode='live'):
         limit = latest_recorded_second + (window_hours * 3600)
         return df[df['seconds_since_now'] <= limit].copy()
 
+# Raw columns whose stored unit differs from what someone reads off the
+# dashboard and would naturally type as an Offset in the Kalibraties sheet
+# (e.g. pressure is stored in Pa but shown/thought of in hPa). Multiplies
+# the logged Offset before adding it to the raw column.
+CALIBRATION_OFFSET_SCALE = {
+    'bmp_pressure_avg': 100,
+    'bmp_pressure_min': 100,
+    'bmp_pressure_max': 100,
+}
+
+
+def apply_calibration_offsets(df):
+    """
+    Applies calibration offsets from the "Kalibraties" log (see
+    get_calibration_log()) to df's sensor columns. For each row, the most
+    recent calibration entry for that column (by Datum, Europe/Brussels
+    local) whose date is on or before the row's received_at is used - each
+    new calibration entry replaces the previous one for that column (not
+    cumulative), since it reflects the sensor's calibration state at that
+    point, not an incremental adjustment on top of the last one. Rows from
+    before any calibration for a column are left untouched. Returns a copy;
+    the input df is not mutated. A no-op (returns df as-is) if the log is
+    empty or df has no received_at column.
+    """
+    if df.empty or 'received_at' not in df.columns:
+        return df
+    log = get_calibration_log()
+    if log.empty:
+        return df
+
+    df = df.copy()
+    tz = pytz.timezone('Europe/Brussels')
+    local_date = df['received_at'].dt.tz_convert(tz).dt.normalize()
+
+    for col in log['Kolom'].dropna().unique():
+        if col not in df.columns:
+            continue
+        scale = CALIBRATION_OFFSET_SCALE.get(col, 1)
+        col_log = log[(log['Kolom'] == col) & log['Datum'].notna() & log['Offset'].notna()].sort_values('Datum')
+        if col_log.empty:
+            continue
+        offsets = pd.Series(0.0, index=df.index)
+        for _, entry in col_log.iterrows():
+            entry_date_local = tz.localize(entry['Datum'].normalize())
+            offsets.loc[local_date >= entry_date_local] = float(entry['Offset']) * scale
+        df[col] = df[col] + offsets
+
+    return df
+
+
 def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
     df = google_sheet_df.copy()
     #formatting
     df['received_at'] =pd.to_datetime(df['received_at'], utc=True).dt.floor('s').dt.floor('s')
+
+    # Apply any logged sensor calibrations before anything else derives from
+    # these columns (e.g. the noise clamp below, or heat index elsewhere).
+    df = apply_calibration_offsets(df)
 
     #enriching the data
     df['received_at_td_seconds'] = df['received_at'].diff().dt.total_seconds() #td stands for time difference
@@ -598,6 +652,32 @@ def get_forecast_df():
     # Rename to match the x-axis convention used throughout the dashboard
     df = df.rename(columns={'forecast_for': 'received_at'})
     df = df.sort_values('received_at').reset_index(drop=True)
+    return df
+
+
+@st.cache_data(ttl=5 * 60)
+def get_calibration_log(sheet_id="1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q", sheet_name="Kalibraties"):
+    """
+    Reads the manually-maintained "Kalibraties" tab (columns: Datum, Kolom,
+    Offset, Notitie) from the main Google Sheet - a log of when each sensor
+    column was calibrated and by how much. The app has no write access to
+    Sheets, so this tab is maintained by hand; fetched by sheet name (not
+    gid) via the gviz endpoint so it keeps working if the tab gets reordered.
+    Returns an empty DataFrame (not an error) if the tab doesn't exist yet.
+    """
+    expected_cols = ['Datum', 'Kolom', 'Offset', 'Notitie']
+    url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
+    try:
+        df = pd.read_csv(url)
+    except Exception:
+        return pd.DataFrame(columns=expected_cols)
+    # If the named tab doesn't exist, Google's gviz endpoint silently falls
+    # back to the first sheet instead of erroring - detect that by checking
+    # the expected columns are actually present, rather than trusting the
+    # request "succeeded".
+    if not set(expected_cols).issubset(df.columns):
+        return pd.DataFrame(columns=expected_cols)
+    df['Datum'] = pd.to_datetime(df['Datum'], errors='coerce')
     return df
 
 
