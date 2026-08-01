@@ -158,3 +158,26 @@ else:
         {'selector': 'th', 'props': [('background-color', '#ecebe3')]},
     ])
     st.table(styled_table)
+
+    # #--------------------- windroos -----------------------------
+    st.subheader("Windroos")
+    month_mask = (
+        (df['received_at'].dt.tz_convert(tz).dt.year == selected_year)
+        & (df['received_at'].dt.tz_convert(tz).dt.month == selected_month)
+    )
+    month_df = df[month_mask]
+
+    wind_rose_df = utils.build_wind_rose_data(
+        month_df, direction_col='wind_direction', speed_col='wind_speed_kmh_max', min_gate_speed=3.0
+    )
+    wind_rose_chart = utils.render_wind_rose_chart(wind_rose_df)
+
+    if wind_rose_chart is None:
+        st.warning("Geen winddata voor deze maand.")
+    else:
+        rose_col, legend_col = st.columns([1.1, 1])
+        with rose_col:
+            st.altair_chart(wind_rose_chart, use_container_width=False)
+        with legend_col:
+            st.markdown(utils.render_wind_rose_legend_html(), unsafe_allow_html=True)
+        st.caption("Enkel metingen vanaf 3 km/u (windstoot) worden meegenomen in de windroos.")
