@@ -493,12 +493,16 @@ def compute_daily_temperature_stats(df, year, month, avg_col='sht_temperature_av
     return pd.DataFrame(rows)
 
 
-def compute_monthly_stats(df, year, month, col):
+def compute_monthly_stats(df, year, month, col, mean_min_threshold=None):
     """
     Mean, max and min of `col` (typically an *_avg column) across all
     records in the given year/month (Europe/Brussels local), plus the
     local date each of the max/min occurred on. Returns a dict with keys
     mean, max, max_date, min, min_date - all None if there's no data.
+
+    mean_min_threshold: if given, the mean only considers rows where col >
+    this value (e.g. light_intensity_avg > 1, to exclude nighttime zeros
+    from dragging the average down) - max/min still use all rows.
     """
     tz = pytz.timezone('Europe/Brussels')
     days_in_month = calendar.monthrange(year, month)[1]
@@ -517,8 +521,9 @@ def compute_monthly_stats(df, year, month, col):
 
     max_idx = work[col].idxmax()
     min_idx = work[col].idxmin()
+    mean_source = work[work[col] > mean_min_threshold] if mean_min_threshold is not None else work
     return {
-        'mean': float(work[col].mean()),
+        'mean': float(mean_source[col].mean()) if not mean_source.empty else None,
         'max': float(work.loc[max_idx, col]),
         'max_date': work.loc[max_idx, 'local_date'],
         'min': float(work.loc[min_idx, col]),

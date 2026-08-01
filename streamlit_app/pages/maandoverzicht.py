@@ -117,19 +117,21 @@ else:
     if not pressure_df.empty:
         pressure_df["bmp_pressure_avg"] = pressure_df["bmp_pressure_avg"] / 100
 
-    # (label, source df, column, unit, show_gem, show_min)
+    # (label, source df, column, unit, show_gem, show_min, mean_min_threshold)
     rows_config = [
-        ("Temperatuur", df, "sht_temperature_avg", "°C", True, True),
-        ("Luchtvochtigheid", df, "sht_humidity_avg", "%", True, True),
-        ("Luchtdruk", pressure_df, "bmp_pressure_avg", "hPa", True, True),
-        ("Zon", df, "light_intensity_avg", "W/m²", True, False),
-        ("Wind", df, "wind_speed_kmh_avg", "km/h", True, False),
-        ("Windstoot", df, "wind_speed_kmh_max", "km/h", False, False),
+        ("Temperatuur", df, "sht_temperature_avg", "°C", True, True, None),
+        ("Luchtvochtigheid", df, "sht_humidity_avg", "%", True, True, None),
+        ("Luchtdruk", pressure_df, "bmp_pressure_avg", "hPa", True, True, None),
+        ("Zon", df, "light_intensity_avg", "W/m²", True, False, 1),
+        ("Wind", df, "wind_speed_kmh_avg", "km/h", True, False, None),
+        ("Windstoot", df, "wind_speed_kmh_max", "km/h", False, False, None),
     ]
 
     table_rows = []
-    for label, source_df, col, unit, show_gem, show_min in rows_config:
-        stats = utils.compute_monthly_stats(source_df, selected_year, selected_month, col)
+    for label, source_df, col, unit, show_gem, show_min, mean_min_threshold in rows_config:
+        stats = utils.compute_monthly_stats(
+            source_df, selected_year, selected_month, col, mean_min_threshold=mean_min_threshold
+        )
         max_str = f"{stats['max']:.1f} {unit} ({stats['max_date'].strftime('%d-%m')})" if stats['max'] is not None else "-"
         min_str = (
             f"{stats['min']:.1f} {unit} ({stats['min_date'].strftime('%d-%m')})"
@@ -158,6 +160,7 @@ else:
         {'selector': 'th', 'props': [('background-color', '#ecebe3')]},
     ])
     st.table(styled_table)
+    st.caption("Gem bij Zon telt enkel metingen > 1 W/m² mee, zodat de nacht (0 W/m²) het gemiddelde niet omlaag trekt.")
 
     # #--------------------- windroos -----------------------------
     st.subheader("Windroos")
