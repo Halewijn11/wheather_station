@@ -198,7 +198,7 @@ with temp_metric_col:
             st.caption(hi_delta_caption, unsafe_allow_html=True)
 
     if current_dew_point is not None and pd.notna(current_dew_point):
-        st.metric("Current Dauwpunt", f"{current_dew_point:.1f} °C")
+        st.metric("Current Dew Point", f"{current_dew_point:.1f} °C")
         dp_delta_caption = _delta_caption(current_dew_point, dew_point_24h_ago_val, "24h ago")
         if dp_delta_caption:
             st.caption(dp_delta_caption, unsafe_allow_html=True)
@@ -491,6 +491,9 @@ st.markdown(
     <style>
     [data-testid="stMetricValue"] {
         font-size: 24px;
+    }
+    [data-testid="stCaptionContainer"] {
+        margin-top: -0.8rem;
     }
     </style>
     """,
