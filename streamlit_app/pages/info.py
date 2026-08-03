@@ -38,7 +38,7 @@ Hoe een datapunt in een grafiek berekend wordt:
 - Helderheidsindex = gemeten energie tot nu / TOA-instraling tot nu (numeriek geïntegreerd sinds zonsopgang), als %
 - TOA : Spencer (1971)-benaderingen voor declinatie/excentriciteit
 - Heat Index (Grafieken-tab) : NWS-formule (Steadman 1979, Rothfusz-regressie 1990, herzien door NOAA in 1998), berekend uit sht_temperature_avg + sht_humidity_avg. Onder ~26.7°C wordt de eenvoudige middelingsformule gebruikt i.p.v. de volledige regressie (niet betekenisvol/geldig bij lagere temperaturen); erboven de volledige regressie met de officiële correctietermen voor lage (<13%) en hoge (>85%) vochtigheid. Berekening gebeurt intern in °F, weergave in °C.
-
+- Dauwpunt wordt bereken met de formule van Magnus-Tetens.
 """)
 
 st.subheader("windroos")

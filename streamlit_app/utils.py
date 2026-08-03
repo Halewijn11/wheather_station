@@ -315,6 +315,17 @@ def compute_heat_index_series(temp_c, rh_pct):
     return pd.Series(hi_c, index=temp_c.index) if hasattr(temp_c, 'index') else hi_c
 
 
+def compute_dew_point_series(temp_c, rh_pct):
+    """
+    Dew point (°C) via the Magnus-Tetens approximation, using the commonly
+    used b=17.62, c=243.12°C constants (accurate for -45..60°C, 1-100% RH).
+    """
+    b, c = 17.62, 243.12
+    gamma = np.log(rh_pct / 100.0) + (b * temp_c) / (c + temp_c)
+    dew_point_c = (c * gamma) / (b - gamma)
+    return pd.Series(dew_point_c, index=temp_c.index) if hasattr(temp_c, 'index') else dew_point_c
+
+
 def compute_todays_solar_energy(df, col='light_intensity_avg', interval_minutes=5):
     """
     Rough estimate of today's solar irradiation energy per m², integrating the
