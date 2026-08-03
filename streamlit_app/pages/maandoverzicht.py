@@ -183,4 +183,7 @@ else:
             st.altair_chart(wind_rose_chart, use_container_width=False)
         with legend_col:
             st.markdown(utils.render_wind_rose_legend_html(), unsafe_allow_html=True)
-        st.caption("Enkel metingen vanaf 3 km/u (windstoot) worden meegenomen in de windroos.")
+        st.caption(
+            "Deze windroos is gebaseerd op de windstoot (max windsnelheid), niet op de gemiddelde "
+            "windsnelheid. Enkel metingen vanaf 3 km/u worden meegenomen."
+        )

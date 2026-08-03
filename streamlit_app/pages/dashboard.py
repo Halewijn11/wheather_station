@@ -114,10 +114,13 @@ humidity_24h_ago_val, _ = utils.value_at_offset(df, "sht_humidity_avg", 24 * 360
 show_temp_max = st.session_state.get("temp_show_max", False)
 show_temp_min = st.session_state.get("temp_show_min", False)
 show_heat_index = st.session_state.get("temp_show_heat_index", False)
+show_dew_point = st.session_state.get("temp_show_dew_point", False)
 
 current_temp = None
 current_heat_index = None
 heat_index_24h_ago_val = None
+current_dew_point = None
+dew_point_24h_ago_val = None
 if not df.empty:
     # Sourced from the full unfiltered df, not time_window_df, so "Current"
     # is the true latest reading rather than the last (possibly resampled/
@@ -125,11 +128,17 @@ if not df.empty:
     current_temp = df["sht_temperature_avg"].iloc[-1]
     current_humidity_now = df["sht_humidity_avg"].iloc[-1]
     current_heat_index = utils.compute_heat_index_series(current_temp, current_humidity_now)
+    current_dew_point = utils.compute_dew_point_series(current_temp, current_humidity_now)
     if pd.notna(current_heat_index) and temp_24h_ago_val is not None and humidity_24h_ago_val is not None:
         heat_index_24h_ago_val = utils.compute_heat_index_series(temp_24h_ago_val, humidity_24h_ago_val)
+    if pd.notna(current_dew_point) and temp_24h_ago_val is not None and humidity_24h_ago_val is not None:
+        dew_point_24h_ago_val = utils.compute_dew_point_series(temp_24h_ago_val, humidity_24h_ago_val)
 
 if not time_window_df.empty:
     time_window_df["heat_index_avg"] = utils.compute_heat_index_series(
+        time_window_df["sht_temperature_avg"], time_window_df["sht_humidity_avg"]
+    )
+    time_window_df["dew_point_avg"] = utils.compute_dew_point_series(
         time_window_df["sht_temperature_avg"], time_window_df["sht_humidity_avg"]
     )
 
@@ -160,15 +169,19 @@ if show_temp_min:
     temp_chart.add_extra_series(col_name="sht_temperature_min", label="min", color="#DC2626")
 if show_heat_index:
     temp_chart.add_extra_series(col_name="heat_index_avg", label="heat index", color="#EA580C")
+if show_dew_point:
+    temp_chart.add_extra_series(col_name="dew_point_avg", label="dew point", color="#0891B2")
 
 def _render_temp_toggles():
-    temp_toggle_max, temp_toggle_min, temp_toggle_hi = st.columns(3)
+    temp_toggle_max, temp_toggle_min, temp_toggle_hi, temp_toggle_dp = st.columns(4)
     with temp_toggle_max:
         st.checkbox("Max", value=show_temp_max, key="temp_show_max")
     with temp_toggle_min:
         st.checkbox("Min", value=show_temp_min, key="temp_show_min")
     with temp_toggle_hi:
         st.checkbox("Heat Index", value=show_heat_index, key="temp_show_heat_index")
+    with temp_toggle_dp:
+        st.checkbox("Dew Point", value=show_dew_point, key="temp_show_dew_point")
 
 temp_metric_col, temp_chart_col = st.columns([1, 2])
 with temp_metric_col:
@@ -183,6 +196,12 @@ with temp_metric_col:
         hi_delta_caption = _delta_caption(current_heat_index, heat_index_24h_ago_val, "24h ago")
         if hi_delta_caption:
             st.caption(hi_delta_caption, unsafe_allow_html=True)
+
+    if current_dew_point is not None and pd.notna(current_dew_point):
+        st.metric("Current Dauwpunt", f"{current_dew_point:.1f} °C")
+        dp_delta_caption = _delta_caption(current_dew_point, dew_point_24h_ago_val, "24h ago")
+        if dp_delta_caption:
+            st.caption(dp_delta_caption, unsafe_allow_html=True)
 
 with temp_chart_col:
     temp_chart.plot(time_window_df, prediction_df=forecast_df, prediction_col='temp',
