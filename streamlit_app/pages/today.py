@@ -227,9 +227,16 @@ def rain_total(frame, window_label):
     return windowed["rain_mm"].fillna(0).sum()
 
 
-rain_col1, rain_col2, rain_col3, rain_col4 = st.columns(4)
+rain_today_mm = rain_total(df, 'Since Midnight')
+
+rain_gauge_col, rain_col1, rain_col2, rain_col3, rain_col4 = st.columns([1.2, 1, 1, 1, 1])
+with rain_gauge_col:
+    st.markdown(
+        utils.render_measuring_cylinder(rain_today_mm, min_val=0, max_val=20, unit=" mm"),
+        unsafe_allow_html=True
+    )
 with rain_col1:
-    st.metric("Today", f"{rain_total(df, 'Since Midnight'):.1f} mm")
+    st.metric("Today", f"{rain_today_mm:.1f} mm")
 with rain_col2:
     st.metric("Last 24h", f"{rain_total(df, 'Last 24 Hours'):.1f} mm")
 with rain_col3:
