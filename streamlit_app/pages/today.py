@@ -4,10 +4,10 @@ import utils
 import os
 from streamlit_autorefresh import st_autorefresh
 
-# Rerun the page every 60s so it picks up new data as soon as the
+# Rerun the page every 6 minutes so it picks up new data as soon as the
 # 3-minute get_data() cache (see utils.py) expires, without needing
 # a manual "Refresh Data" click.
-st_autorefresh(interval=60_000, key="today_autorefresh")
+st_autorefresh(interval=360_000, key="today_autorefresh")
 
 current_dir = os.path.dirname(__file__)
 asset_path = os.path.join(current_dir, "..", "assets")
