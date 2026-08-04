@@ -15,10 +15,10 @@ cached_time = 0
 time_window_hours = 1
 time_window_filtering_mode = 'last_session'
 
-# Rerun the page every 60s so it picks up new data as soon as the
+# Rerun the page every 6 minutes so it picks up new data as soon as the
 # 3-minute get_data() cache (see utils.py) expires, without needing
 # a manual "Refresh Data" click.
-st_autorefresh(interval=60_000, key="dashboard_autorefresh")
+st_autorefresh(interval=360_000, key="dashboard_autorefresh")
 
 
 
@@ -430,11 +430,23 @@ if show_forecast and not forecast_df.empty:
 
  # #--------------------- rain pulses -----------------------------
 st.subheader("Rain")
+
+
+def rain_total(frame, window_label):
+    windowed = utils.filter_by_recency(frame, window_label=window_label, mode='last_session')
+    if windowed.empty:
+        return 0.0
+    return windowed["rain_mm"].fillna(0).sum()
+
+
 rain_col1, rain_col2 = st.columns([1, 2])
 with rain_col1:
     current_rain = df["rain_mm"].iloc[-1] if not df.empty else None
     if current_rain is not None and pd.notna(current_rain):
         st.metric("Current", f"{current_rain:.1f} mm")
+
+    st.metric("Rain Today", f"{rain_total(df, 'Since Midnight'):.1f} mm")
+    st.metric("Rain Last 24h", f"{rain_total(df, 'Last 24 Hours'):.1f} mm")
 
 with rain_col2:
     if time_window_df.empty:
