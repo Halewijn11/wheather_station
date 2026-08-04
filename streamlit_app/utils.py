@@ -1934,6 +1934,64 @@ def render_thermometer(value, min_val=-10, max_val=40, unit="°C", width=70, hei
 '''
 
 
+def render_measuring_cylinder(value, min_val=0, max_val=20, unit="mm", width=90, height=200,
+                               tube_color="#E5E7EB", fill_color="#93C5FD",
+                               text_color="#3d3a2a", muted_color="#898781", step=5):
+    """
+    Renders a vertical measuring-cylinder / rain-gauge (graduated tube, no
+    bulb) as an SVG string. value is clamped to [min_val, max_val] for the
+    fill level; the raw value is still shown as text so an out-of-range
+    reading is visible, not hidden.
+    """
+    if value is None or pd.isna(value):
+        return ""
+
+    clamped = min(max(value, min_val), max_val)
+    frac = (clamped - min_val) / (max_val - min_val)
+
+    scale = height / 200
+    tube_w = 50 * scale
+    cx = width / 2
+    tube_top_y = 15 * scale
+    tube_bottom_y = height - 40 * scale
+    tube_height = tube_bottom_y - tube_top_y
+    fill_height = tube_height * frac
+    fill_top_y = tube_bottom_y - fill_height
+    text_y = height - 15 * scale
+    corner_r = 4 * scale
+
+    n_ticks = int(round((max_val - min_val) / step)) + 1
+    ticks_svg = []
+    for i in range(n_ticks):
+        tick_val = min_val + i * step
+        tick_frac = (tick_val - min_val) / (max_val - min_val)
+        y = tube_bottom_y - tube_height * tick_frac
+        ticks_svg.append(
+            f'<line x1="{cx - tube_w / 2:.2f}" y1="{y:.2f}" x2="{cx - tube_w / 2 - 6 * scale:.2f}" y2="{y:.2f}" '
+            f'stroke="{muted_color}" stroke-width="{1.2 * scale:.2f}"/>'
+        )
+        ticks_svg.append(
+            f'<text x="{cx - tube_w / 2 - 9 * scale:.2f}" y="{y:.2f}" font-size="{10 * scale:.2f}" fill="{muted_color}" '
+            f'text-anchor="end" dominant-baseline="middle" font-family="system-ui, sans-serif">{tick_val:g}</text>'
+        )
+
+    return f'''
+<div style="display:flex; justify-content:center;">
+<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}"
+     xmlns="http://www.w3.org/2000/svg" role="img"
+     aria-label="Measuring cylinder, current value {value:.1f} {unit}">
+  <rect x="{cx - tube_w / 2:.2f}" y="{tube_top_y:.2f}" width="{tube_w:.2f}" height="{tube_height:.2f}"
+        rx="{corner_r:.2f}" fill="{tube_color}" stroke="{muted_color}" stroke-width="{1 * scale:.2f}"/>
+  <rect x="{cx - tube_w / 2:.2f}" y="{fill_top_y:.2f}" width="{tube_w:.2f}" height="{fill_height:.2f}"
+        rx="{corner_r:.2f}" fill="{fill_color}"/>
+  {''.join(ticks_svg)}
+  <text x="{cx:.2f}" y="{text_y:.2f}" font-size="{15 * scale:.2f}" font-weight="600" fill="{text_color}"
+        text-anchor="middle" font-family="system-ui, sans-serif">{value:.1f}{unit}</text>
+</svg>
+</div>
+'''
+
+
 WIND_SPEED_BINS = [0, 5, 10, 15, 20, np.inf]
 # Blue (calm) -> red (strong), ColorBrewer 5-class RdYlBu reversed.
 WIND_ROSE_COLORS = ['#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c']
