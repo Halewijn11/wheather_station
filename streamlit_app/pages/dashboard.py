@@ -430,18 +430,83 @@ if show_forecast and not forecast_df.empty:
 
  # #--------------------- rain pulses -----------------------------
 st.subheader("Rain")
-utils.TimeSeriesDashboardItem(
-    metric_title="Current",
-    unit="mm",
-    y_col_main="rain_mm",
-    y_col_main_label="rain (mm)",
-    main_color="#93C5FD" # Turquoise
-).add_extra_series(
-    col_name="rain_mm_cumulated",
-    label="cumulated rain (mm)",
-    color="#00CED1"
-).plot(time_window_df, format=".1f",
-       current_val=df["rain_mm"].iloc[-1] if not df.empty else None)
+rain_col1, rain_col2 = st.columns([1, 2])
+with rain_col1:
+    current_rain = df["rain_mm"].iloc[-1] if not df.empty else None
+    if current_rain is not None and pd.notna(current_rain):
+        st.metric("Current", f"{current_rain:.1f} mm")
+
+with rain_col2:
+    if time_window_df.empty:
+        st.warning("No data for Rain")
+    else:
+        rain_bar_color = "#93C5FD"
+        rain_cum_color = "#00CED1"
+
+        rain_bars = alt.Chart(time_window_df).mark_bar(color=rain_bar_color).encode(
+            x=alt.X("received_at:T", title=None, axis=alt.Axis(labelExpr=utils.DATE_AT_MIDNIGHT_LABEL_EXPR)),
+            y=alt.Y("rain_mm:Q", title="rain (mm)", axis=alt.Axis(titleColor=rain_bar_color)),
+        )
+
+        rain_cum_line = alt.Chart(time_window_df).mark_line(strokeWidth=2, color=rain_cum_color).encode(
+            x=alt.X("received_at:T", title=None),
+            y=alt.Y("rain_mm_cumulated:Q", title="cumulated rain (mm)", axis=alt.Axis(titleColor=rain_cum_color)),
+        )
+
+        # Full-width horizontal reference line through the cumulated total's
+        # peak, labeled with the max value - same style as the max lines on
+        # the other charts. Layered together with rain_cum_line (rather than
+        # as a separate top-level layer) so it shares its right-hand scale
+        # instead of getting its own independent one.
+        rain_cum_layers = [rain_cum_line]
+        cum_max_idx = time_window_df["rain_mm_cumulated"].idxmax()
+        cum_max_peak = time_window_df["rain_mm_cumulated"].max()
+        if pd.notna(cum_max_peak):
+            rain_cum_max_line = alt.Chart(pd.DataFrame({'y': [cum_max_peak]})).mark_rule(
+                color='#EF4444', strokeDash=[4, 4], strokeWidth=1, opacity=0.6
+            ).encode(y=alt.Y('y:Q'))
+
+            cum_max_time = time_window_df.loc[cum_max_idx, "received_at"]
+            rain_cum_max_label_df = pd.DataFrame({
+                "received_at": [time_window_df["received_at"].min()],
+                'y': [cum_max_peak],
+                'label': [f"max {cum_max_peak:.1f} mm at {utils.local_datetime_str(cum_max_time)}"],
+            })
+            rain_cum_max_label = alt.Chart(rain_cum_max_label_df).mark_text(
+                align='left', baseline='bottom', dy=-2, color='#EF4444', fontSize=11
+            ).encode(x=alt.X("received_at:T"), y=alt.Y('y:Q'), text='label:N')
+
+            rain_cum_layers += [rain_cum_max_line, rain_cum_max_label]
+
+        # Snap-to-nearest-x hover with one combined tooltip for both series,
+        # same pattern as the other charts - without this, hovering only
+        # picks up whichever single mark happens to be under the cursor.
+        nearest = alt.selection_point(on='mouseover', nearest=True, fields=['received_at'],
+                                      encodings=['x'], empty=False)
+
+        rain_selectors = alt.Chart(time_window_df).mark_rule().encode(
+            x='received_at:T',
+            opacity=alt.value(0),
+            tooltip=[
+                alt.Tooltip('received_at:T', title='Time', format='%d %b %H:%M'),
+                alt.Tooltip('rain_mm:Q', title='rain (mm)', format='.1f'),
+                alt.Tooltip('rain_mm_cumulated:Q', title='cumulated rain (mm)', format='.1f'),
+            ]
+        ).add_params(nearest)
+
+        rain_hover_rule = alt.Chart(time_window_df).mark_rule(color='#A1A6B4', strokeDash=[4, 4]).encode(
+            x='received_at:T',
+        ).transform_filter(nearest)
+
+        rain_cum_point = rain_cum_line.mark_point(size=30, color=rain_cum_color).encode(
+            opacity=alt.condition(nearest, alt.value(1), alt.value(0))
+        )
+        rain_cum_layers.append(rain_cum_point)
+
+        rain_chart = alt.layer(
+            rain_bars, alt.layer(*rain_cum_layers), rain_hover_rule, rain_selectors
+        ).resolve_scale(y='independent').properties(width='container', height=280)
+        st.altair_chart(rain_chart, use_container_width=True)
 
 #  #--------------------- wind direction as a function of tiem -----------------------------
 # radial_coords_df = utils.transform_to_radial_cartesian(time_window_df,'received_at', 'wind_direction')
