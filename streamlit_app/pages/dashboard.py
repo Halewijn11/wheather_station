@@ -452,8 +452,8 @@ with rain_col2:
     if time_window_df.empty:
         st.warning("No data for Rain")
     else:
-        rain_bar_color = "#93C5FD"
-        rain_cum_color = "#00CED1"
+        rain_bar_color = "#3B82F6"
+        rain_cum_color = "#F97316"
 
         rain_bars = alt.Chart(time_window_df).mark_bar(color=rain_bar_color).encode(
             x=alt.X("received_at:T", title=None, axis=alt.Axis(labelExpr=utils.DATE_AT_MIDNIGHT_LABEL_EXPR)),

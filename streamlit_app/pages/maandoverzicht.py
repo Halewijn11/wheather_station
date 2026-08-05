@@ -117,9 +117,16 @@ else:
     if not pressure_df.empty:
         pressure_df["bmp_pressure_avg"] = pressure_df["bmp_pressure_avg"] / 100
 
+    dew_point_df = df.copy()
+    if not dew_point_df.empty:
+        dew_point_df["dew_point_avg"] = utils.compute_dew_point_series(
+            dew_point_df["sht_temperature_avg"], dew_point_df["sht_humidity_avg"]
+        )
+
     # (label, source df, column, unit, show_gem, show_min, mean_min_threshold)
     rows_config = [
         ("Temperatuur", df, "sht_temperature_avg", "°C", True, True, None),
+        ("Dauwpunt", dew_point_df, "dew_point_avg", "°C", True, True, None),
         ("Luchtvochtigheid", df, "sht_humidity_avg", "%", True, True, None),
         ("Luchtdruk", pressure_df, "bmp_pressure_avg", "hPa", True, True, None),
         ("Zon", df, "light_intensity_avg", "W/m²", True, False, 1),
