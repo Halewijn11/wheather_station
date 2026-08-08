@@ -95,22 +95,18 @@ float getWindDirection(float voltage, float maxVoltage) {
 }
 
 // ##################### everything for light sensor ###############################3
-float getSolarRadiation(Adafruit_ADS1115& ads, uint8_t signalChannel, uint8_t refChannel) {
+float getSolarRadiation(Adafruit_ADS1115& ads, uint8_t signalChannel) {
     // 1. Read the signal from the solar sensor
     int16_t rawSignal = ads.readADC_SingleEnded(signalChannel);
-    // 2. Read the reference voltage (excitation voltage)
-    int16_t rawRef = ads.readADC_SingleEnded(refChannel);
 
-    // 3. Safety: Handle negative noise
+    // 2. Safety: Handle negative noise
     if (rawSignal < 0) rawSignal = 0;
-    
-    // 4. Prevent division by zero if reference is missing/disconnected
-    if (rawRef <= 0) return 0.0; 
 
-    // 5. Ratiometric Calculation: (Signal / Reference) * 1800
-    // Note: Since both use the same Gain, we can use raw ADC steps 
-    // because the 0.125mV multiplier would just cancel itself out.
-    float solarRadiation = ((float)rawSignal / (float)rawRef) * 1800.0;
+    // 3. Raw ADC steps to millivolts (0.125mV per step at this gain)
+    float signalMv = (float)rawSignal * 0.125f;
+
+    // 4. Fixed scale: sensor outputs 1.67mV per W/m^2
+    float solarRadiation = signalMv / 1.67f;
 
     return solarRadiation;
 }
