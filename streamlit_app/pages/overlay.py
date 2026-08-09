@@ -59,3 +59,4 @@ elif not enabled_series:
 else:
     chart = utils.plot_normalized_overlay(time_window_df, enabled_series)
     st.altair_chart(chart, use_container_width=True)
+    utils.render_overlay_zoom_dialog(time_window_df, enabled_series)
