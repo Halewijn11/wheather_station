@@ -905,8 +905,15 @@ def get_moonrise_moonset(latitude=50.924503, longitude=4.112950):
         longitude=longitude
     )
 
-    moonrise = astral_moon.moonrise(city.observer, date=date.today(), tzinfo=city.timezone)
-    moonset = astral_moon.moonset(city.observer, date=date.today(), tzinfo=city.timezone)
+    try:
+        moonrise = astral_moon.moonrise(city.observer, date=date.today(), tzinfo=city.timezone)
+    except ValueError:
+        moonrise = None
+
+    try:
+        moonset = astral_moon.moonset(city.observer, date=date.today(), tzinfo=city.timezone)
+    except ValueError:
+        moonset = None
 
     moonrise_str = moonrise.strftime("%H:%M") if moonrise is not None else "--:--"
     moonset_str = moonset.strftime("%H:%M") if moonset is not None else "--:--"
@@ -1637,18 +1644,13 @@ OVERLAY_SERIES_COLORS = {
 }
 
 
-def plot_normalized_overlay(df, series_config, x_col='received_at', height=420):
+def _prepare_overlay_melted(df, series_config, x_col='received_at'):
     """
-    Overlays multiple differently-scaled series on one chart by indexing each to
-    0-100% of its own min-max range within `df`. Only the line's vertical
-    position is normalized; the tooltip and legend still show real values/units,
-    since the normalized percentage alone isn't meaningful.
-
-    series_config: list of dicts with keys 'col', 'label', 'unit', 'color', 'format'.
+    Shared normalization step for the overlay chart and its zoom dialog:
+    indexes each configured series to 0-100% of its own min-max range
+    within `df`. Returns (melted_long_df, color_scale), or (None, None) if
+    there's nothing to plot.
     """
-    if df.empty or not series_config:
-        return None
-
     long_rows = []
     for s in series_config:
         col = s['col']
@@ -1670,14 +1672,31 @@ def plot_normalized_overlay(df, series_config, x_col='received_at', height=420):
         }))
 
     if not long_rows:
-        return None
+        return None, None
 
     melted = pd.concat(long_rows, ignore_index=True)
-
     color_scale = alt.Scale(
         domain=[s['label'] for s in series_config],
         range=[s['color'] for s in series_config],
     )
+    return melted, color_scale
+
+
+def plot_normalized_overlay(df, series_config, x_col='received_at', height=420):
+    """
+    Overlays multiple differently-scaled series on one chart by indexing each to
+    0-100% of its own min-max range within `df`. Only the line's vertical
+    position is normalized; the tooltip and legend still show real values/units,
+    since the normalized percentage alone isn't meaningful.
+
+    series_config: list of dicts with keys 'col', 'label', 'unit', 'color', 'format'.
+    """
+    if df.empty or not series_config:
+        return None
+
+    melted, color_scale = _prepare_overlay_melted(df, series_config, x_col)
+    if melted is None:
+        return None
 
     x_encoding = alt.X(f"{x_col}:T", title=None, axis=alt.Axis(labelExpr=DATE_AT_MIDNIGHT_LABEL_EXPR))
     y_encoding = alt.Y("Normalized:Q", title="Genormaliseerd (0-100%)",
@@ -1736,6 +1755,102 @@ def plot_normalized_overlay(df, series_config, x_col='received_at', height=420):
     return alt.layer(*layers).properties(width='container', height=height).add_params(
         alt.selection_interval(bind='scales', zoom=False)
     )
+
+
+def render_overlay_zoom_dialog(df, series_config, x_col='received_at', button_label="🔍 Expand"):
+    """
+    Same "Expand button -> two-panel brush-to-zoom" pattern as
+    TimeSeriesDashboardItem.render_zoom_dialog(), adapted for the
+    normalized multi-series overlay chart: a detail view on top (zoomable
+    via the brush below) and a full-range overview strip with the brush
+    selection, both using the same normalized values/colors as the main
+    overlay chart.
+    """
+    if df.empty or not series_config:
+        return
+
+    melted, color_scale = _prepare_overlay_melted(df, series_config, x_col)
+    if melted is None:
+        return
+
+    @st.dialog("Overlay", width="large")
+    def _zoom_dialog():
+        line_data = melted[melted['ChartType'] != 'scatter']
+        point_data = melted[melted['ChartType'] == 'scatter']
+
+        brush = alt.selection_interval(encodings=['x'])
+
+        base = alt.Chart(melted).encode(
+            y=alt.Y("Normalized:Q", title="Genormaliseerd (0-100%)",
+                    scale=alt.Scale(domain=[0, 100], clamp=True)),
+            color=alt.Color("Variable:N", scale=color_scale, title=None,
+                             legend=alt.Legend(orient="bottom", symbolType='stroke', symbolStrokeWidth=3)),
+        )
+        base_line = alt.Chart(line_data).encode(
+            y=alt.Y("Normalized:Q", scale=alt.Scale(domain=[0, 100], clamp=True)),
+            color=alt.Color("Variable:N", scale=color_scale, title=None,
+                             legend=alt.Legend(orient="bottom", symbolType='stroke', symbolStrokeWidth=3)),
+        )
+        base_point = alt.Chart(point_data).encode(
+            y=alt.Y("Normalized:Q", scale=alt.Scale(domain=[0, 100], clamp=True)),
+            color=alt.Color("Variable:N", scale=color_scale, title=None),
+        )
+
+        detail_x = alt.X(f"{x_col}:T", title=None, scale=alt.Scale(domain=brush))
+
+        detail_layers = []
+        if not line_data.empty:
+            detail_layers.append(base_line.mark_line(strokeWidth=2).encode(x=detail_x))
+        if not point_data.empty:
+            detail_layers.append(base_point.mark_point(size=18, filled=True).encode(x=detail_x))
+
+        # Snap-to-nearest-x hover with one combined tooltip for every enabled
+        # series, same pattern as the main overlay chart - without this,
+        # hovering over the dialog's detail panel shows nothing at all.
+        nearest = alt.selection_point(on='mouseover', nearest=True, fields=[x_col],
+                                      encodings=['x'], empty=False)
+
+        tooltip_list = [alt.Tooltip(f"{x_col}:T", title="Time", format='%d %b %H:%M')]
+        for s in series_config:
+            if s['col'] in df.columns:
+                tooltip_list.append(
+                    alt.Tooltip(f"{s['col']}:Q", title=f"{s['label']} ({s.get('unit', '')})",
+                                format=s.get('format', '.2f'))
+                )
+
+        detail_selectors = alt.Chart(df).mark_rule().encode(
+            x=detail_x, opacity=alt.value(0), tooltip=tooltip_list,
+        ).add_params(nearest)
+
+        detail_hover_rule = alt.Chart(melted).mark_rule(color='#A1A6B4', strokeDash=[4, 4]).encode(
+            x=detail_x,
+        ).transform_filter(nearest)
+
+        detail_hover_points = base.mark_point(size=30).encode(
+            x=detail_x, opacity=alt.condition(nearest, alt.value(1), alt.value(0))
+        )
+
+        detail_layers += [detail_selectors, detail_hover_rule, detail_hover_points]
+        detail = alt.layer(*detail_layers).properties(width='container', height=350)
+
+        overview_layers = []
+        if not line_data.empty:
+            overview_layers.append(base_line.mark_line(strokeWidth=1).encode(
+                x=alt.X(f"{x_col}:T", title=None)
+            ))
+        if not point_data.empty:
+            overview_layers.append(base_point.mark_point(size=8, filled=True).encode(
+                x=alt.X(f"{x_col}:T", title=None)
+            ))
+        overview = alt.layer(*overview_layers).properties(
+            width='container', height=80
+        ).add_params(brush)
+
+        st.altair_chart(alt.vconcat(detail, overview), use_container_width=True)
+        st.caption("Sleep een rechthoek in de onderste strook om in te zoomen op de bovenste grafiek.")
+
+    if st.button(button_label, key="overlay_zoom_dialog_btn"):
+        _zoom_dialog()
 
 
 import math
