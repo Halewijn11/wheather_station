@@ -323,7 +323,7 @@ void loop() {
             float degrees = getWindDirection(windVolts, refVolts);
 
             //light intensity
-            float solarRadiation = getSolarRadiation(ads, adcLightIntensityChannel, 2);
+            float solarRadiation = getSolarRadiation(ads, adcLightIntensityChannel);
             
             //the sht sensor
             sht.read(); 
