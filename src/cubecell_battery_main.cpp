@@ -100,14 +100,6 @@ uint32_t measurementInterval_s = 5;
 // uint32_t measurementInterval_s = 10;
 int sampleCount = 0;
 
-/* LoRaWAN time-sync state (see issue #103) */
-bool timeSynced = false;
-uint16_t txCounter = 0;
-bool forceSyncThisTurn = true;
-const uint32_t sendIntervalSeconds = 300; // numSamples * measurementInterval_s
-const uint32_t preSyncRetryMs = 15000;
-const uint32_t resyncTxThreshold = 2000;
-
 // Fan Specifics (disabled - no PWM/tachometer)
 // Adafruit_PWMServoDriver pwmBoard = Adafruit_PWMServoDriver();
 // const int fan_tach_pin = GPIO1;  
@@ -151,14 +143,6 @@ uint32_t adcLightIntensityChannel = 0;
 // Increment this whenever you change the payload structure
 uint8_t payloadVersion = 5;
 uint16_t battery_voltage_mv = 0;
-
-/* Callback fired automatically by the LoRaMac stack on MLME_DEVICE_TIME sync */
-void dev_time_updated() {
-    Serial.println(">>> Clock synced via network time.");
-    timeSynced = true;
-    forceSyncThisTurn = false;
-    txCounter = 0;
-}
 
 /* Prepares the payload of the frame */
 static void prepareTxFrame( uint8_t port ) {
@@ -300,18 +284,6 @@ void loop() {
             break;
         }
         case DEVICE_STATE_SEND: {
-            if (!timeSynced) {
-                // Pre-sync: no sampling, just retry the time request every 15s
-                MlmeReq_t mlmeReq;
-                mlmeReq.Type = MLME_DEVICE_TIME;
-                LoRaMacMlmeRequest(&mlmeReq);
-                Serial.println(">>> Time not synced yet. Appending MLME_DEVICE_TIME request...");
-                prepareTxFrame(appPort);
-                LoRaWAN.send();
-                deviceState = DEVICE_STATE_CYCLE;
-                break;
-            }
-
             // 1. Collect Samples
             int16_t windRaw = ads.readADC_SingleEnded(1);
             // Convert raw value to Volts: (Raw * 0.125mV) / 1000
@@ -350,24 +322,12 @@ void loop() {
 
             // 2. Check if it is time to Uplink
             if (sampleCount >= numSamples) {
-                if (forceSyncThisTurn) {
-                    MlmeReq_t mlmeReq;
-                    mlmeReq.Type = MLME_DEVICE_TIME;
-                    LoRaMacMlmeRequest(&mlmeReq);
-                    Serial.println(">>> Weekly resync due. Appending MLME_DEVICE_TIME request...");
-                }
-
                 // Read battery voltage once before sending
                 // Read battery voltage from ADS1115 channel A3 (0.1875 mV/bit at default gain)
                 // battery_voltage_mv = (uint16_t)(ads.readADC_SingleEnded(3) * 0.1875f);
                 battery_voltage_mv = getBatteryVoltage();
                 prepareTxFrame(appPort);
                 LoRaWAN.send();
-
-                txCounter++;
-                if (txCounter >= resyncTxThreshold) {
-                    forceSyncThisTurn = true;
-                }
                 //reset the values
 
                 sampleCount = 0;
@@ -391,17 +351,7 @@ void loop() {
             break;
         }
         case DEVICE_STATE_CYCLE: {
-            if (!timeSynced) {
-                txDutyCycleTime = preSyncRetryMs;
-            } else if (sampleCount == (int)(numSamples - 1)) {
-                TimerSysTime_t sysTimeCurrent = TimerGetSysTime();
-                uint32_t secondsPastInterval = sysTimeCurrent.Seconds % sendIntervalSeconds;
-                uint32_t secondsToWait = sendIntervalSeconds - secondsPastInterval;
-                if (secondsToWait < 2) secondsToWait = 1; // clamp, don't skip a whole window
-                txDutyCycleTime = secondsToWait * 1000;
-            } else {
-                txDutyCycleTime = measurementInterval_s * 1000;
-            }
+            txDutyCycleTime = measurementInterval_s * 1000;
             LoRaWAN.cycle(txDutyCycleTime);
             deviceState = DEVICE_STATE_SLEEP;
             break;
