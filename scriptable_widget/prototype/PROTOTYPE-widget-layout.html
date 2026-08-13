@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PROTOTYPE — iPhone widget layout (throwaway, not production)</title>
+<style>
+  :root {
+    --ink: #3d3a2a;
+    --muted: #898781;
+    --line: #E5E7EB;
+    --bg: #f4f4f2;
+    --temp: #2563EB;
+    --light: #F97316;
+    --wind1: #2c7bb6; --wind2: #abd9e9; --wind3: #ffffbf; --wind4: #fdae61; --wind5: #d7191c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 0 120px; background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: var(--ink); display: flex; flex-direction: column; align-items: center; gap: 24px;
+  }
+  h1 { font-size: 15px; color: var(--muted); font-weight: 600; margin: 0 0 4px; }
+  .note { font-size: 12px; color: var(--muted); max-width: 420px; text-align: center; margin-bottom: 8px; }
+  .stage { display: flex; gap: 18px; align-items: flex-start; }
+  .phone-frame {
+    background: #111; border-radius: 46px; padding: 14px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.25);
+  }
+  .widget-shell {
+    background: #1c1c1e; border-radius: 24px; padding: 6px;
+  }
+  canvas { display: block; border-radius: 20px; }
+  .legend {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-size: 11px; color: var(--muted); width: 260px;
+  }
+  .legend b { color: var(--ink); }
+  .legend code {
+    display: block; background: #f6f6f4; border-radius: 6px; padding: 6px 8px;
+    margin: 4px 0 10px; font-size: 10.5px; color: var(--ink); white-space: pre-wrap;
+  }
+  .switcher {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    background: #1c1c1e; color: #fff; padding: 10px 18px; border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35); font-size: 13px; z-index: 10;
+  }
+  .switcher button {
+    background: none; border: none; color: #fff; font-size: 16px; cursor: pointer;
+    width: 28px; height: 28px; border-radius: 50%;
+  }
+  .switcher button:hover { background: rgba(255,255,255,.15); }
+  .switcher .label { min-width: 220px; text-align: center; }
+  .switcher .label small { display: block; color: #aaa; font-size: 10px; }
+</style>
+</head>
+<body>
+
+<h1 id="variantTitle">Loading…</h1>
+<div class="note" id="variantNote"></div>
+
+<div class="stage">
+  <div class="phone-frame">
+    <div class="widget-shell">
+      <canvas id="cv"></canvas>
+    </div>
+  </div>
+  <div class="legend">
+    <b>Canvas call → Scriptable DrawContext</b>
+    <code id="mapping"></code>
+    <div>Dummy data shaped like the future <code style="display:inline">doGet</code> JSON: <code style="display:inline">{latest, today}</code>. Swap <code style="display:inline">DUMMY</code> for a real fetch once ticket #109 (API endpoint) lands.</div>
+  </div>
+</div>
+
+<div class="switcher">
+  <button id="prev">‹</button>
+  <div class="label" id="switchLabel"></div>
+  <button id="next">›</button>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// PROTOTYPE — throwaway. Answers "what should the widget layout look like?"
+// Three variants, switchable via ?variant=A|B|C, cycled with the bottom bar
+// or ←/→. Canvas drawing intentionally mirrors Scriptable's DrawContext API
+// 1:1 (see the legend panel) so picking a layout here also teaches the real
+// widget-scripting workflow before touching a phone.
+// ---------------------------------------------------------------------------
+
+// ---- dummy data, shaped like the future doGet response --------------------
+function seededRandom(seed) {
+  return function () {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+}
+function buildDummyData() {
+  const rnd = seededRandom(42);
+  const points = 48; // every 5 min for a slice of "today"
+  const temp = [], light = [], wind = [], rain = [], timestamps = [];
+  let t = 14, l = 200, rainTotal = 0;
+  for (let i = 0; i < points; i++) {
+    t += (rnd() - 0.5) * 0.6;
+    l += (rnd() - 0.5) * 40;
+    l = Math.max(0, l);
+    temp.push(t);
+    light.push(l);
+    const speed = Math.max(0, 8 + (rnd() - 0.4) * 10);
+    const dir = Math.floor(rnd() * 360);
+    wind.push({ speed, dir });
+    const rainTick = rnd() < 0.15 ? rnd() * 1.2 : 0;
+    rainTotal += rainTick;
+    rain.push(Math.round(rainTotal * 10) / 10);
+    timestamps.push(new Date(Date.now() - (points - i) * 5 * 60 * 1000));
+  }
+  return {
+    latest: { temp: temp[temp.length - 1], light: light[light.length - 1], wind_speed: wind[wind.length - 1].speed, rain: rain[rain.length - 1] },
+    today: { temp, light, wind, rain, timestamps },
+  };
+}
+
+// Live endpoint from ticket #109 — best-effort from a browser (Apps Script
+// web apps usually don't send CORS headers, so this may just fail silently
+// and fall back to dummy data; the note under the phone frame says which
+// one you're looking at). The Scriptable-side .js prototype next to this
+// file hits the same endpoint without the CORS problem.
+const ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbxAX62uDNNXsPZ8dtsyTaL_p5Vmear12enFtOmN2TGXjbE1U9ExJVEVDA4DyfwfA7Ba/exec';
+
+async function loadLiveData() {
+  const res = await fetch(ENDPOINT_URL, { mode: 'cors' });
+  const json = await res.json();
+  if (!json.today || !json.today.length) throw new Error('empty response');
+  return {
+    live: true,
+    latest: { temp: json.latest.temp_c, light: json.latest.light, wind_speed: json.latest.wind_kmh, rain: json.latest.rain_mm },
+    today: {
+      temp: json.today.map(r => r.temp_c),
+      light: json.today.map(r => r.light),
+      wind: json.today.map(r => ({ speed: r.wind_kmh, dir: 0 })),
+      rain: json.today.map(r => r.rain_mm),
+      timestamps: json.today.map(r => new Date(r.timestamp)),
+    },
+  };
+}
+
+let DUMMY = buildDummyData(); // placeholder until the live fetch resolves (or fails)
+const WIND_BINS = [0, 5, 10, 15, 20, Infinity];
+const WIND_COLORS = ['#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c'];
+
+// ---- shared drawing helpers -------------------------------------------
+// Every helper below is written against CanvasRenderingContext2D but named
+// after the Scriptable DrawContext call it stands in for, so translating a
+// chosen variant into a real widget script is close to mechanical.
+
+function dc_setFillColor(ctx, hex) { ctx.fillStyle = hex; }        // == DrawContext.setFillColor(new Color(hex))
+function dc_setStrokeColor(ctx, hex) { ctx.strokeStyle = hex; }    // == DrawContext.setStrokeColor(new Color(hex))
+function dc_setLineWidth(ctx, w) { ctx.lineWidth = w; }            // == DrawContext.setLineWidth(w)
+
+function dc_fillRect(ctx, x, y, w, h, hex, radius = 0) {
+  // == let path = new Path(); path.addRoundedRect(new Rect(x,y,w,h), radius, radius); dc.addPath(path); dc.setFillColor(...); dc.fillPath()
+  dc_setFillColor(ctx, hex);
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.fill();
+}
+
+function dc_strokeLinePath(ctx, points, hex, width) {
+  // == let path = new Path(); path.move(points[0]); points.slice(1).forEach(p => path.addLine(p));
+  //    dc.addPath(path); dc.setStrokeColor(new Color(hex)); dc.setLineWidth(width); dc.strokePath()
+  if (points.length < 2) return;
+  dc_setStrokeColor(ctx, hex);
+  dc_setLineWidth(ctx, width);
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i][0], points[i][1]);
+  ctx.stroke();
+}
+
+function dc_drawText(ctx, text, x, y, hex, size, weight = '600', align = 'left') {
+  // == let txt = dc.drawTextInRect / dc.drawText(text, new Point(x,y)) with
+  //    dc.setFont(Font.systemFont(size)) / Font.boldSystemFont(size), dc.setTextColor(new Color(hex))
+  dc_setFillColor(ctx, hex);
+  ctx.font = `${weight} ${size}px -apple-system, sans-serif`;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(text, x, y);
+}
+
+function sparkline(ctx, x, y, w, h, values, hex, lineWidth = 2.5) {
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = (max - min) || 1;
+  const pts = values.map((v, i) => [
+    x + (i / (values.length - 1)) * w,
+    y + h - ((v - min) / range) * h,
+  ]);
+  dc_strokeLinePath(ctx, pts, hex, lineWidth);
+  return pts;
+}
+
+function bars(ctx, x, y, w, h, values, hex) {
+  // == per-bar: Path.addRoundedRect(new Rect(...), r, r); dc.fillPath()
+  const max = Math.max(...values, 0.1);
+  const barW = w / values.length;
+  values.forEach((v, i) => {
+    const barH = (v / max) * h;
+    dc_fillRect(ctx, x + i * barW + barW * 0.15, y + h - barH, barW * 0.7, barH, hex, barW * 0.2);
+  });
+}
+
+function hourLabels(timestamps, n = 6) {
+  const step = Math.max(1, Math.floor(timestamps.length / n));
+  const labels = [];
+  for (let i = 0; i < timestamps.length; i += step) {
+    const d = timestamps[i];
+    labels.push(`${String(d.getHours()).padStart(2, '0')}:00`);
+  }
+  return labels;
+}
+
+function windBinIndex(speed) {
+  for (let i = 0; i < WIND_BINS.length - 1; i++) {
+    if (speed >= WIND_BINS[i] && speed < WIND_BINS[i + 1]) return i;
+  }
+  return WIND_BINS.length - 2;
+}
+
+function windRose(ctx, cx, cy, maxR, windSamples) {
+  // Frequency-by-direction-sector, colored by speed bin — same idea as the
+  // Streamlit wind rose (utils.py render_wind_rose_svg), redrawn with
+  // DrawContext-style primitives: dc.addEllipse for rings, dc.addLine per wedge.
+  const sectors = 16;
+  const sectorAngle = (Math.PI * 2) / sectors;
+  const counts = Array.from({ length: sectors }, () => [0, 0, 0, 0, 0]);
+  windSamples.forEach(({ speed, dir }) => {
+    const s = Math.floor(((dir % 360) / 360) * sectors);
+    counts[s][windBinIndex(speed)]++;
+  });
+  const maxTotal = Math.max(...counts.map(c => c.reduce((a, b) => a + b, 0)), 1);
+
+  // faint reference rings
+  dc_setStrokeColor(ctx, '#D1D5DB');
+  dc_setLineWidth(ctx, 1);
+  [0.33, 0.66, 1].forEach(f => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR * f, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+
+  counts.forEach((bins, s) => {
+    let rInner = 0;
+    const total = bins.reduce((a, b) => a + b, 0);
+    const rOuterTotal = Math.sqrt(total / maxTotal) * maxR;
+    let cum = 0;
+    bins.forEach((count, bi) => {
+      if (count === 0) return;
+      cum += count;
+      const rOuter = Math.sqrt(cum / maxTotal) * maxR;
+      const a0 = s * sectorAngle - Math.PI / 2;
+      const a1 = a0 + sectorAngle * 0.85;
+      dc_setFillColor(ctx, WIND_COLORS[bi]);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a0) * rInner, cy + Math.sin(a0) * rInner);
+      ctx.arc(cx, cy, rOuter, a0, a1);
+      ctx.arc(cx, cy, rInner, a1, a0, true);
+      ctx.closePath();
+      ctx.fill();
+      rInner = rOuter;
+    });
+  });
+}
+
+// ---- three structurally different variants --------------------------------
+
+function VariantA(ctx, W, H) {
+  // Equal vertical stack — temp trend / light trend / wind rose, same weight.
+  // Widget family: medium (338x158pt @1x, drawn here at 3x = 1014x474).
+  dc_fillRect(ctx, 0, 0, W, H, '#000000', 0);
+  const pad = 28, rowH = (H - pad * 2) / 3 - 10;
+
+  dc_drawText(ctx, `${DUMMY.latest.temp.toFixed(1)}°`, pad, pad + 30, '#ffffff', 30);
+  sparkline(ctx, pad + 140, pad, W - pad * 2 - 140, rowH, DUMMY.today.temp, '#60A5FA');
+
+  const y2 = pad + rowH + 15;
+  dc_drawText(ctx, `${Math.round(DUMMY.latest.light)} lx`, pad, y2 + 30, '#ffffff', 24);
+  sparkline(ctx, pad + 140, y2, W - pad * 2 - 140, rowH, DUMMY.today.light, '#FB923C');
+
+  const y3 = y2 + rowH + 15;
+  dc_drawText(ctx, `${DUMMY.latest.wind_speed.toFixed(1)} km/h`, pad, y3 + rowH / 2, '#ffffff', 20);
+  windRose(ctx, W - pad - rowH / 2, y3 + rowH / 2, rowH / 2, DUMMY.today.wind);
+}
+
+function VariantB(ctx, W, H) {
+  // Two-column split — left: stacked small sparklines. right: dominant wind rose.
+  // Widget family: large (338x354pt @1x, drawn at 3x = 1014x1062... scaled down here).
+  dc_fillRect(ctx, 0, 0, W, H, '#0b0b0c', 0);
+  const pad = 26, colW = W * 0.42;
+
+  dc_drawText(ctx, 'TODAY', pad, pad + 12, '#8E8E93', 13, '700');
+
+  const rowH = (H - pad * 2 - 40) / 2;
+  dc_drawText(ctx, `${DUMMY.latest.temp.toFixed(1)}°`, pad, pad + 55, '#60A5FA', 22);
+  sparkline(ctx, pad, pad + 65, colW - pad, rowH - 40, DUMMY.today.temp, '#60A5FA');
+
+  const y2 = pad + 55 + rowH;
+  dc_drawText(ctx, `${Math.round(DUMMY.latest.light)} lx`, pad, y2 + 30, '#FB923C', 22);
+  sparkline(ctx, pad, y2 + 40, colW - pad, rowH - 40, DUMMY.today.light, '#FB923C');
+
+  const rcx = colW + (W - colW) / 2, rcy = H / 2;
+  const r = Math.min(W - colW, H) / 2 - 20;
+  windRose(ctx, rcx, rcy, r, DUMMY.today.wind);
+  dc_drawText(ctx, `${DUMMY.latest.wind_speed.toFixed(1)} km/h`, rcx, H - 18, '#ffffff', 15, '600', 'center');
+}
+
+function VariantC(ctx, W, H) {
+  // Hero number + two secondary tiles — different information hierarchy:
+  // temp is the primary affordance, light/wind are equal-weight secondary tiles.
+  // Widget family: medium (338x158pt @1x).
+  dc_fillRect(ctx, 0, 0, W, H, '#111318', 0);
+  const pad = 26;
+
+  // faint full-bleed sparkline behind the hero number
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  sparkline(ctx, 0, H * 0.15, W * 0.62, H * 0.55, DUMMY.today.temp, '#60A5FA');
+  ctx.restore();
+  dc_drawText(ctx, `${DUMMY.latest.temp.toFixed(1)}°`, pad, H * 0.62, '#ffffff', 46, '700');
+  dc_drawText(ctx, 'now', pad, H * 0.62 + 20, '#8E8E93', 13);
+
+  const tileW = W * 0.34, tileX = W - pad - tileW, tileH = (H - pad * 2 - 12) / 2;
+  dc_fillRect(ctx, tileX, pad, tileW, tileH, '#1c1f26', 14);
+  dc_drawText(ctx, `${Math.round(DUMMY.latest.light)} lx`, tileX + 12, pad + 24, '#FB923C', 16, '700');
+  sparkline(ctx, tileX + 10, pad + 32, tileW - 20, tileH - 40, DUMMY.today.light, '#FB923C');
+
+  const tileY2 = pad + tileH + 12;
+  dc_fillRect(ctx, tileX, tileY2, tileW, tileH, '#1c1f26', 14);
+  dc_drawText(ctx, `${DUMMY.latest.wind_speed.toFixed(1)} km/h`, tileX + 12, tileY2 + 24, '#93C5FD', 16, '700');
+  windRose(ctx, tileX + tileW / 2, tileY2 + tileH / 2 + 14, Math.min(tileW, tileH) / 2 - 14, DUMMY.today.wind);
+}
+
+function VariantD(ctx, W, H) {
+  // Mirrors the reference screenshot you sent: location + big "now" temp
+  // top-left, wind badge top-right, ONE combined chart (temp line drawn
+  // over rain bars) instead of separate sparklines, hour labels along the
+  // bottom. Light is dropped from the primary view entirely — that's a real
+  // structural bet (does the widget need light at a glance, or is it a
+  // Streamlit-only metric?), not a copy tweak of A/B/C.
+  dc_fillRect(ctx, 0, 0, W, H, '#1f4e8c', 24);
+  const pad = 30;
+
+  dc_drawText(ctx, 'Weather Station', pad, pad + 18, '#ffffff', 17, '700');
+  dc_drawText(ctx, `${DUMMY.latest.temp.toFixed(0)}°`, pad, pad + 82, '#ffffff', 56, '700');
+
+  const badgeW = 150, badgeH = 44;
+  dc_fillRect(ctx, W - pad - badgeW, pad, badgeW, badgeH, 'rgba(255,255,255,0.13)', 12);
+  dc_drawText(ctx, `${DUMMY.latest.wind_speed.toFixed(0)} km/h`, W - pad - badgeW / 2, pad + 27, '#ffffff', 14, '700', 'center');
+
+  const chartY = H * 0.5, chartH = H * 0.34, chartX = pad, chartW = W - pad * 2;
+  bars(ctx, chartX, chartY, chartW, chartH, DUMMY.today.rain, 'rgba(79,195,247,0.65)');
+  sparkline(ctx, chartX, chartY, chartW, chartH, DUMMY.today.temp, '#FFC94A', 3);
+
+  const labels = hourLabels(DUMMY.today.timestamps, 6);
+  const labelW = chartW / labels.length;
+  ctx.globalAlpha = 0.7;
+  labels.forEach((lbl, i) => {
+    dc_drawText(ctx, lbl, chartX + i * labelW + labelW / 2, chartY + chartH + 22, '#ffffff', 11, '400', 'center');
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ---- wiring: variant switcher ---------------------------------------------
+
+const VARIANTS = [
+  { key: 'A', name: 'Equal stack', family: 'medium 338×158pt', size: [1014, 474], draw: VariantA,
+    note: 'Temp / light / wind treated as three equal rows. Safest, most legible, least distinctive.' },
+  { key: 'B', name: 'Wind-dominant split', family: 'large 338×354pt', size: [1014, 1062], draw: VariantB,
+    note: 'Wind rose gets a full column — makes sense if wind direction is the thing you actually check most.' },
+  { key: 'C', name: 'Hero + tiles', family: 'medium 338×158pt', size: [1014, 474], draw: VariantC,
+    note: 'Temp is the primary affordance (big number, background sparkline); light/wind demoted to small tiles.' },
+  { key: 'D', name: 'Reference-style (temp line + rain bars)', family: 'medium 338×158pt', size: [1014, 474], draw: VariantD,
+    note: 'Mirrors the iOS weather-widget screenshot: combined temp-line-over-rain-bars chart, wind badge, hour labels. Drops light entirely.' },
+];
+
+const MAPPING_TEXT =
+`ctx.roundRect+fill   -> Path.addRoundedRect + dc.fillPath()
+ctx.moveTo/lineTo    -> Path.move/addLine + dc.strokePath()
+ctx.fillText         -> dc.drawTextInRect() / dc.drawText()
+ctx.arc (wedges)     -> Path.addArc via dc.addPath()
+bars (rain)          -> per-bar Path.addRoundedRect + dc.fillPath()
+canvas size (3x)     -> dc.size = new Size(w,h); dc.respectScreenScale = true`;
+
+function getVariantFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const key = params.get('variant');
+  return VARIANTS.find(v => v.key === key) || VARIANTS[0];
+}
+
+function render(variant) {
+  const cv = document.getElementById('cv');
+  const [w, h] = variant.size;
+  const scale = w > 700 ? 0.32 : 0.36; // fit phone-sized frame regardless of family
+  cv.width = w; cv.height = h;
+  cv.style.width = `${w * scale}px`;
+  cv.style.height = `${h * scale}px`;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  variant.draw(ctx, w, h);
+
+  const dataNote = DUMMY.live ? ' | LIVE data from doGet endpoint' : ' | dummy data (live fetch failed — CORS or offline; try the Scriptable .js version on-phone for real data)';
+  document.getElementById('variantTitle').textContent = `${variant.key} — ${variant.name}`;
+  document.getElementById('variantNote').textContent = `${variant.family}. ${variant.note}${dataNote}`;
+  document.getElementById('switchLabel').innerHTML = `${variant.key} — ${variant.name}<small>${variant.family}</small>`;
+  document.getElementById('mapping').textContent = MAPPING_TEXT;
+}
+
+let current = VARIANTS.indexOf(getVariantFromUrl());
+function go(delta) {
+  current = (current + delta + VARIANTS.length) % VARIANTS.length;
+  const v = VARIANTS[current];
+  const params = new URLSearchParams(location.search);
+  params.set('variant', v.key);
+  history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
+  render(v);
+}
+
+document.getElementById('prev').addEventListener('click', () => go(-1));
+document.getElementById('next').addEventListener('click', () => go(1));
+document.addEventListener('keydown', (e) => {
+  const active = document.activeElement;
+  if (active && ['INPUT', 'TEXTAREA'].includes(active.tagName)) return;
+  if (e.key === 'ArrowLeft') go(-1);
+  if (e.key === 'ArrowRight') go(1);
+});
+
+render(VARIANTS[current]);
+
+loadLiveData()
+  .then(d => { DUMMY = { ...d, live: true }; render(VARIANTS[current]); })
+  .catch(e => { console.log('live fetch failed, staying on dummy data:', e); DUMMY.live = false; render(VARIANTS[current]); });
+</script>
+</body>
+</html>
