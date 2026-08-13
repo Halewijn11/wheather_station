@@ -114,7 +114,13 @@ function buildDummyData() {
     timestamps.push(new Date(Date.now() - (points - i) * 5 * 60 * 1000));
   }
   return {
-    latest: { temp: temp[temp.length - 1], light: light[light.length - 1], wind_speed: wind[wind.length - 1].speed, rain: rain[rain.length - 1] },
+    latest: {
+      temp: temp[temp.length - 1],
+      light: light[light.length - 1],
+      wind_speed: wind[wind.length - 1].speed,
+      wind_dir: wind[wind.length - 1].dir,
+      rain: rain[rain.length - 1],
+    },
     today: { temp, light, wind, rain, timestamps },
   };
 }
@@ -132,11 +138,20 @@ async function loadLiveData() {
   if (!json.today || !json.today.length) throw new Error('empty response');
   return {
     live: true,
-    latest: { temp: json.latest.temp_c, light: json.latest.light, wind_speed: json.latest.wind_kmh, rain: json.latest.rain_mm },
+    // wind_dir_deg only exists once the doGet endpoint is redeployed with the
+    // direction column (V) — until then it's undefined and the badge falls
+    // back to speed-only.
+    latest: {
+      temp: json.latest.temp_c,
+      light: json.latest.light,
+      wind_speed: json.latest.wind_kmh,
+      wind_dir: json.latest.wind_dir_deg != null ? json.latest.wind_dir_deg : null,
+      rain: json.latest.rain_mm,
+    },
     today: {
       temp: json.today.map(r => r.temp_c),
       light: json.today.map(r => r.light),
-      wind: json.today.map(r => ({ speed: r.wind_kmh, dir: 0 })),
+      wind: json.today.map(r => ({ speed: r.wind_kmh, dir: r.wind_dir_deg != null ? r.wind_dir_deg : 0 })),
       rain: json.today.map(r => r.rain_mm),
       timestamps: json.today.map(r => new Date(r.timestamp)),
     },
@@ -195,26 +210,6 @@ function sparkline(ctx, x, y, w, h, values, hex, lineWidth = 2.5) {
   ]);
   dc_strokeLinePath(ctx, pts, hex, lineWidth);
   return pts;
-}
-
-function bars(ctx, x, y, w, h, values, hex) {
-  // == per-bar: Path.addRoundedRect(new Rect(...), r, r); dc.fillPath()
-  const max = Math.max(...values, 0.1);
-  const barW = w / values.length;
-  values.forEach((v, i) => {
-    const barH = (v / max) * h;
-    dc_fillRect(ctx, x + i * barW + barW * 0.15, y + h - barH, barW * 0.7, barH, hex, barW * 0.2);
-  });
-}
-
-function hourLabels(timestamps, n = 6) {
-  const step = Math.max(1, Math.floor(timestamps.length / n));
-  const labels = [];
-  for (let i = 0; i < timestamps.length; i += step) {
-    const d = timestamps[i];
-    labels.push(`${String(d.getHours()).padStart(2, '0')}:00`);
-  }
-  return labels;
 }
 
 function windBinIndex(speed) {
@@ -337,34 +332,113 @@ function VariantC(ctx, W, H) {
   windRose(ctx, tileX + tileW / 2, tileY2 + tileH / 2 + 14, Math.min(tileW, tileH) / 2 - 14, DUMMY.today.wind);
 }
 
+const CARDINALS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+function cardinal(deg) {
+  return CARDINALS[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
+}
+
+function dc_windArrow(ctx, cx, cy, r, deg, hex) {
+  // Meteorological convention (same as the reference screenshot): the LABEL
+  // says where the wind comes FROM ("SW"), the ARROW points where it blows
+  // TOWARD — hence the +180.
+  const a = (deg + 180) * Math.PI / 180;
+  const tx = cx + Math.sin(a) * r, ty = cy - Math.cos(a) * r;
+  const bx = cx - Math.sin(a) * r, by = cy + Math.cos(a) * r;
+  dc_setStrokeColor(ctx, hex);
+  dc_setLineWidth(ctx, r * 0.22);
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.stroke();
+  const head = r * 0.55;
+  ctx.beginPath();
+  ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.sin(a - 0.5) * head, ty + Math.cos(a - 0.5) * head);
+  ctx.moveTo(tx, ty); ctx.lineTo(tx - Math.sin(a + 0.5) * head, ty + Math.cos(a + 0.5) * head);
+  ctx.stroke();
+}
+
+function downsampleIdx(len, n) {
+  if (len <= n) return Array.from({ length: len }, (_, i) => i);
+  return Array.from({ length: n }, (_, i) => Math.round(i * (len - 1) / (n - 1)));
+}
+
 function VariantD(ctx, W, H) {
-  // Mirrors the reference screenshot you sent: location + big "now" temp
-  // top-left, wind badge top-right, ONE combined chart (temp line drawn
-  // over rain bars) instead of separate sparklines, hour labels along the
-  // bottom. Light is dropped from the primary view entirely — that's a real
-  // structural bet (does the widget need light at a glance, or is it a
-  // Streamlit-only metric?), not a copy tweak of A/B/C.
-  dc_fillRect(ctx, 0, 0, W, H, '#1f4e8c', 24);
-  const pad = 30;
+  // "D2" — winner of ticket #110. Mirrors the reference screenshot:
+  // location + big "now" temp top-left, wind badge (speed only — payload
+  // has no direction) top-right, ONE combined chart (temp line + rain bars)
+  // with a value label above/below every point, hour labels along the
+  // bottom. Light dropped from this view entirely — a real structural bet,
+  // not a copy tweak of A/B/C.
+  //
+  // Every element lives in its own fixed, disjoint vertical band (in
+  // 338x158pt design space, scaled by `s`) so nothing can collide
+  // regardless of the data's actual range:
+  //   header 8-56pt | temp line 68-104pt (labels ride ~7pt above each point,
+  //   so they occupy 61-99pt) | rain bars 112-130pt | rain labels 133-142pt |
+  //   hour labels 145-154pt
+  // Temp line and rain bars get SEPARATE bands — they never overlap.
+  const s = W / 338;
+  dc_fillRect(ctx, 0, 0, W, H, '#1f4e8c', 24 * s);
 
-  dc_drawText(ctx, 'Weather Station', pad, pad + 18, '#ffffff', 17, '700');
-  dc_drawText(ctx, `${DUMMY.latest.temp.toFixed(0)}°`, pad, pad + 82, '#ffffff', 56, '700');
+  dc_drawText(ctx, 'Weather Station', 16 * s, 20 * s, '#ffffff', 13 * s, '700');
+  dc_drawText(ctx, `${DUMMY.latest.temp.toFixed(0)}°`, 16 * s, 50 * s, '#ffffff', 24 * s, '700');
 
-  const badgeW = 150, badgeH = 44;
-  dc_fillRect(ctx, W - pad - badgeW, pad, badgeW, badgeH, 'rgba(255,255,255,0.13)', 12);
-  dc_drawText(ctx, `${DUMMY.latest.wind_speed.toFixed(0)} km/h`, W - pad - badgeW / 2, pad + 27, '#ffffff', 14, '700', 'center');
+  // wind badge: arrow + cardinal origin on top, speed below (reference layout)
+  const hasDir = DUMMY.latest.wind_dir != null;
+  const badgeW = (hasDir ? 78 : 62) * s, badgeH = (hasDir ? 32 : 24) * s, badgeX = W - 16 * s - badgeW;
+  dc_fillRect(ctx, badgeX, 8 * s, badgeW, badgeH, 'rgba(255,255,255,0.2)', 10 * s);
+  if (hasDir) {
+    dc_windArrow(ctx, badgeX + 15 * s, 8 * s + badgeH / 2, 8 * s, DUMMY.latest.wind_dir, '#ffffff');
+    dc_drawText(ctx, cardinal(DUMMY.latest.wind_dir), badgeX + 29 * s, 22 * s, '#ffffff', 10 * s, '700');
+    dc_drawText(ctx, `${DUMMY.latest.wind_speed.toFixed(0)} km/h`, badgeX + 29 * s, 34 * s, '#ffffff', 10 * s, '600');
+  } else {
+    dc_drawText(ctx, `${DUMMY.latest.wind_speed.toFixed(0)} km/h`, badgeX + badgeW / 2, 24 * s, '#ffffff', 10 * s, '700', 'center');
+  }
 
-  const chartY = H * 0.5, chartH = H * 0.34, chartX = pad, chartW = W - pad * 2;
-  bars(ctx, chartX, chartY, chartW, chartH, DUMMY.today.rain, 'rgba(79,195,247,0.65)');
-  sparkline(ctx, chartX, chartY, chartW, chartH, DUMMY.today.temp, '#FFC94A', 3);
+  // temp is drawn at FULL resolution (every sample of today's series);
+  // rain bars + all labels (temp / rain / hour) stay on the 6 four-hourly
+  // marks so the widget stays readable. Both share one x-axis: sample index
+  // i -> chartX + (i / (N-1)) * chartW, so the labelled dots sit exactly on
+  // the high-res line.
+  const tempAll = DUMMY.today.temp;
+  const N = tempAll.length;
+  const idx = downsampleIdx(N, 6);
+  const temps = idx.map(i => tempAll[i]);
+  const rains = idx.map(i => DUMMY.today.rain[i]);
+  const times = idx.map(i => DUMMY.today.timestamps[i]);
 
-  const labels = hourLabels(DUMMY.today.timestamps, 6);
-  const labelW = chartW / labels.length;
-  ctx.globalAlpha = 0.7;
-  labels.forEach((lbl, i) => {
-    dc_drawText(ctx, lbl, chartX + i * labelW + labelW / 2, chartY + chartH + 22, '#ffffff', 11, '400', 'center');
+  const chartX = 26 * s, chartW = W - 2 * chartX;
+  const lineTop = 68 * s, lineH = 36 * s;
+  const rainBase = 130 * s, maxBarH = 18 * s, barW = 20 * s;
+  const rainLabelY = 142 * s, hourLabelY = 154 * s;
+  const xOf = i => chartX + (N > 1 ? (i / (N - 1)) * chartW : chartW / 2);
+
+  // y-scale spans the FULL series, else the high-res line would overshoot
+  // the band that was sized off the 6 sampled values.
+  const tMin = Math.min(...tempAll), tMax = Math.max(...tempAll), tRg = tMax - tMin || 1;
+  const yOf = v => lineTop + lineH - ((v - tMin) / tRg) * lineH;
+  const linePts = tempAll.map((v, i) => [xOf(i), yOf(v)]);
+  const pts = idx.map(i => [xOf(i), yOf(tempAll[i])]);
+
+  const rMax = Math.max(...rains, 0.1) * 1.15;
+  rains.forEach((r, i) => {
+    const barH = (r / rMax) * maxBarH;
+    dc_fillRect(ctx, xOf(idx[i]) - barW / 2, rainBase - barH, barW, barH, 'rgba(79,195,247,0.45)', 4 * s);
   });
-  ctx.globalAlpha = 1;
+
+  dc_strokeLinePath(ctx, linePts, '#FFC94A', 2.5 * s);
+
+  // temp label rides just above its own four-hourly datapoint, tracking the line
+  pts.forEach((p, i) => {
+    dc_setFillColor(ctx, '#FFC94A');
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 2.5 * s, 0, Math.PI * 2);
+    ctx.fill();
+    dc_drawText(ctx, `${temps[i].toFixed(0)}°`, p[0], p[1] - 7 * s, '#ffffff', 11 * s, '700', 'center');
+  });
+  rains.forEach((r, i) => dc_drawText(ctx, r.toFixed(1), xOf(idx[i]), rainLabelY, '#dceaff', 9 * s, '600', 'center'));
+  times.forEach((t, i) => {
+    const lbl = `${String(t.getHours()).padStart(2, '0')}:00`;
+    dc_drawText(ctx, lbl, xOf(idx[i]), hourLabelY, '#a9c3e0', 9 * s, '500', 'center');
+  });
 }
 
 // ---- wiring: variant switcher ---------------------------------------------
