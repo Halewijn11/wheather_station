@@ -6,13 +6,15 @@
 //   A — Equal stack: temp / light / wind, three equal rows.
 //   B — Wind-dominant split: sparklines left, big wind rose right.
 //   C — Hero + tiles: temp is the big number, light/wind are small tiles.
-//   D — Reference-style: mirrors the iOS weather-app screenshot you sent —
-//       big "now" temp + condition top-left, wind badge top-right, a single
-//       combined chart with the temp line drawn over rain bars, hour labels
-//       along the bottom.
-// None of them include light in variant D on purpose — the reference photo
-// only has temp + rain + wind, so D tests "what if we drop light from the
-// primary view" as a real structural option, not just a copy tweak.
+//   D — Reference-style (WINNER, picked on ticket #110): mirrors the iOS
+//       weather-app screenshot — big "now" temp top-left, wind badge (speed
+//       only, no direction in the payload) top-right, one combined chart
+//       (temp line + rain bars) with a value label above/below every point,
+//       hour labels along the bottom. Fixed, disjoint vertical bands for
+//       every text row so labels can never overlap regardless of data range.
+// Light is dropped from variant D on purpose — the reference photo only has
+// temp + rain + wind, so D tests "what if we drop light from the primary
+// view" as a real structural option, not just a copy tweak.
 //
 // Pulls LIVE data from the doGet endpoint built in ticket #109. Falls back
 // to seeded dummy data if the fetch fails (e.g. no network) so you can still
@@ -58,6 +60,7 @@ function buildDummyData() {
       timestamp: new Date(Date.now() - (points - i) * 5 * 60 * 1000).toISOString(),
       temp_c: t,
       light: l,
+      wind_dir_deg: Math.floor(rnd() * 360),
       wind_kmh: Math.max(0, 8 + (rnd() - 0.4) * 10),
       rain_mm: Math.round(rainTotal * 10) / 10,
     });
@@ -118,15 +121,6 @@ function drawSparkline(dc, x, y, w, h, values, hex, lineWidth = 2.5) {
   return pts;
 }
 
-function drawBars(dc, x, y, w, h, values, hex) {
-  const max = Math.max(...values, 0.1);
-  const barW = w / values.length;
-  values.forEach((v, i) => {
-    const barH = (v / max) * h;
-    fillRoundedRect(dc, x + i * barW + barW * 0.15, y + h - barH, barW * 0.7, barH, hex, barW * 0.2);
-  });
-}
-
 const WIND_BINS = [0, 5, 10, 15, 20, Infinity];
 const WIND_COLORS = ['#2c7bb6', '#abd9e9', '#ffffbf', '#fdae61', '#d7191c'];
 
@@ -168,16 +162,6 @@ function drawWindRose(dc, cx, cy, maxR, speeds) {
     dc.setFillColor(new Color(WIND_COLORS[windBinIndex(v)]));
     dc.fillPath();
   });
-}
-
-function hourLabels(rows, n = 6) {
-  const step = Math.max(1, Math.floor(rows.length / n));
-  const labels = [];
-  for (let i = 0; i < rows.length; i += step) {
-    const d = new Date(rows[i].timestamp);
-    labels.push(`${String(d.getHours()).padStart(2, '0')}:00`);
-  }
-  return labels;
 }
 
 // ---- four structurally different variants ----------------------------------
@@ -240,33 +224,122 @@ function VariantC(dc, W, H, { latest, today }) {
   drawWindRose(dc, tileX + tileW / 2, tileY2 + tileH / 2 + 14, Math.min(tileW, tileH) / 2 - 14, wind);
 }
 
+const CARDINALS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+function cardinal(deg) {
+  return CARDINALS[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16];
+}
+
+function drawWindArrow(dc, cx, cy, r, deg, hex) {
+  // Meteorological convention (same as the reference screenshot): the LABEL
+  // says where the wind comes FROM ("SW"), the ARROW points where it blows
+  // TOWARD — hence the +180.
+  const a = (deg + 180) * Math.PI / 180;
+  const tip = new Point(cx + Math.sin(a) * r, cy - Math.cos(a) * r);
+  const tail = new Point(cx - Math.sin(a) * r, cy + Math.cos(a) * r);
+  const head = r * 0.55;
+
+  const shaft = new Path();
+  shaft.move(tail);
+  shaft.addLine(tip);
+  dc.addPath(shaft);
+
+  const barb1 = new Path();
+  barb1.move(tip);
+  barb1.addLine(new Point(tip.x - Math.sin(a - 0.5) * head, tip.y + Math.cos(a - 0.5) * head));
+  dc.addPath(barb1);
+
+  const barb2 = new Path();
+  barb2.move(tip);
+  barb2.addLine(new Point(tip.x - Math.sin(a + 0.5) * head, tip.y + Math.cos(a + 0.5) * head));
+  dc.addPath(barb2);
+
+  dc.setStrokeColor(new Color(hex));
+  dc.setLineWidth(r * 0.22);
+  dc.strokePath();
+}
+
+function downsample(rows, n) {
+  if (rows.length <= n) return rows;
+  return Array.from({ length: n }, (_, i) => rows[Math.round(i * (rows.length - 1) / (n - 1))]);
+}
+
 function VariantD(dc, W, H, { latest, today }) {
-  // Mirrors the reference screenshot: location + big "now" temp top-left,
-  // wind badge top-right, one combined chart (temp line over rain bars),
-  // hour labels along the bottom. Light is dropped from this view — a real
-  // structural bet, not a copy tweak (see the top-of-file note).
-  fillRoundedRect(dc, 0, 0, W, H, '#1f4e8c', 24);
-  const pad = 30;
-  const temp = today.map(r => r.temp_c), rain = today.map(r => r.rain_mm);
+  // "D2" — winner of ticket #110. Mirrors the reference screenshot: location
+  // + big "now" temp top-left, wind badge (speed only — payload has no
+  // direction) top-right, ONE combined chart (temp line + rain bars) with
+  // per-point value labels and hour labels. Light dropped from this view —
+  // a real structural bet, not a copy tweak (see top-of-file note).
+  //
+  // Layout is laid out in fixed 338x158pt "bands" (see the design-check
+  // widget on ticket #110) then scaled to the actual W/H so every element
+  // has a disjoint vertical range and can never overlap another:
+  //   header        8–58pt    location + big temp (left), wind badge (right)
+  //   temp line     78–98pt   line + dots; each label rides ~7pt above its
+  //                           OWN datapoint (tracking the line, not a fixed
+  //                           row), so labels occupy 60–93pt
+  //   rain bars    104–130pt  own band — never overlaps the temp line
+  //   rain labels  133–144pt  "0.2" etc
+  //   hour labels  145–157pt  "20:00" etc, bottom row
+  const s = W / 338; // scale from design pt-space to this widget's actual pixels
+  fillRoundedRect(dc, 0, 0, W, H, '#1f4e8c', 24 * s);
 
-  drawText(dc, 'Weather Station', pad, pad, W * 0.6, 24, '#ffffff', 17, 'bold');
-  drawText(dc, `${latest.temp_c.toFixed(0)}°`, pad, pad + 26, W * 0.5, 70, '#ffffff', 56);
+  drawText(dc, 'Weather Station', 16 * s, 8 * s, 200 * s, 18 * s, '#ffffff', 13 * s, 'bold');
+  drawText(dc, `${latest.temp_c.toFixed(0)}°`, 16 * s, 28 * s, 140 * s, 30 * s, '#ffffff', 24 * s, 'bold');
 
-  // wind badge, top-right
-  const badgeW = 150, badgeH = 44;
-  fillRoundedRect(dc, W - pad - badgeW, pad, badgeW, badgeH, '#ffffff22', 12);
-  drawText(dc, `${latest.wind_kmh.toFixed(0)} km/h`, W - pad - badgeW, pad + 10, badgeW, 24, '#ffffff', 14, 'bold', 'center');
+  // wind badge: arrow + cardinal origin on top, speed below (reference layout).
+  // wind_dir_deg only appears once the doGet endpoint is redeployed with the
+  // direction column (V); until then the badge falls back to speed-only.
+  const dir = latest.wind_dir_deg;
+  const hasDir = dir !== null && dir !== undefined;
+  const badgeW = (hasDir ? 78 : 62) * s, badgeH = (hasDir ? 32 : 24) * s, badgeX = W - 16 * s - badgeW;
+  fillRoundedRect(dc, badgeX, 8 * s, badgeW, badgeH, '#ffffff33', 10 * s);
+  if (hasDir) {
+    drawWindArrow(dc, badgeX + 15 * s, 8 * s + badgeH / 2, 8 * s, dir, '#ffffff');
+    drawText(dc, cardinal(dir), badgeX + 29 * s, 12 * s, 44 * s, 12 * s, '#ffffff', 10 * s, 'bold');
+    drawText(dc, `${latest.wind_kmh.toFixed(0)} km/h`, badgeX + 29 * s, 25 * s, 44 * s, 12 * s, '#ffffff', 10 * s, 'regular');
+  } else {
+    drawText(dc, `${latest.wind_kmh.toFixed(0)} km/h`, badgeX, 12 * s, badgeW, badgeH - 6 * s, '#ffffff', 10 * s, 'bold', 'center');
+  }
 
-  // combined chart: rain bars behind, temp line on top
-  const chartY = H * 0.5, chartH = H * 0.34, chartX = pad, chartW = W - pad * 2;
-  drawBars(dc, chartX, chartY, chartW, chartH, rain, '#4FC3F7AA');
-  drawSparkline(dc, chartX, chartY, chartW, chartH, temp, '#FFC94A', 3);
+  const rows = downsample(today, 6);
+  const chartX = 26 * s, chartW = W - 2 * chartX;
+  const lineTop = 78 * s, lineH = 20 * s;
+  const rainBase = 130 * s, maxBarH = 26 * s, barW = 20 * s;
+  const rainLabelY = 133 * s, rainLabelH = 11 * s, hourLabelY = 145 * s, hourLabelH = 12 * s;
+  const step = chartW / (rows.length - 1);
 
-  // hour labels along the bottom
-  const labels = hourLabels(today, 6);
-  const labelW = chartW / labels.length;
-  labels.forEach((lbl, i) => {
-    drawText(dc, lbl, chartX + i * labelW, chartY + chartH + 8, labelW, 16, '#ffffffAA', 11, 'regular', 'center');
+  const temps = rows.map(r => r.temp_c), rains = rows.map(r => r.rain_mm);
+  const tMin = Math.min(...temps), tMax = Math.max(...temps), tRg = tMax - tMin || 1;
+  const pts = temps.map((v, i) => new Point(chartX + i * step, lineTop + lineH - ((v - tMin) / tRg) * lineH));
+
+  const rMax = Math.max(...rains, 0.1) * 1.15;
+  rains.forEach((r, i) => {
+    const barH = (r / rMax) * maxBarH;
+    fillRoundedRect(dc, chartX + i * step - barW / 2, rainBase - barH, barW, barH, '#4FC3F773', 4 * s);
+  });
+
+  const linePath = new Path();
+  linePath.move(pts[0]);
+  pts.slice(1).forEach(p => linePath.addLine(p));
+  dc.addPath(linePath);
+  dc.setStrokeColor(new Color('#FFC94A'));
+  dc.setLineWidth(2.5 * s);
+  dc.strokePath();
+
+  // temp label rides just above its OWN datapoint, tracking the line
+  pts.forEach((p, i) => {
+    const dot = new Path();
+    dot.addEllipse(new Rect(p.x - 2.5 * s, p.y - 2.5 * s, 5 * s, 5 * s));
+    dc.addPath(dot);
+    dc.setFillColor(new Color('#FFC94A'));
+    dc.fillPath();
+    drawText(dc, `${temps[i].toFixed(0)}°`, p.x - step / 2, p.y - 18 * s, step, 13 * s, '#ffffff', 11 * s, 'bold', 'center');
+  });
+  rains.forEach((r, i) => drawText(dc, r.toFixed(1), chartX + i * step - step / 2, rainLabelY, step, rainLabelH, '#dceaff', 9 * s, 'regular', 'center'));
+  rows.forEach((r, i) => {
+    const d = new Date(r.timestamp);
+    const lbl = `${String(d.getHours()).padStart(2, '0')}:00`;
+    drawText(dc, lbl, chartX + i * step - step / 2, hourLabelY, step, hourLabelH, '#a9c3e0', 9 * s, 'regular', 'center');
   });
 }
 
