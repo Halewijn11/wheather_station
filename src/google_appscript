@@ -78,6 +78,9 @@ function doPost(e) {
     var sheet = SpreadsheetApp.openById(sheetId).getSheetByName("Sheet1");
     sheet.appendRow(rowData);
 
+    // New uplink landed, so the widget's cached payload is stale.
+    CacheService.getScriptCache().remove(WIDGET_CACHE_KEY);
+
     return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
     
   } catch (error) {
@@ -87,9 +90,41 @@ function doPost(e) {
 
 // Public read-only endpoint for the iPhone widget (Scriptable).
 // Returns { latest: {...}, today: [...] } built from columns:
-// A=timestamp, J=sht_temperature.avg, S=light_solar.avg, AB=wind.speed_kmh.avg, AD=rain_mm
+// A=timestamp, J=sht_temperature.avg, S=light_solar.avg, V=wind.direction_deg,
+// AB=wind.speed_kmh.avg, AD=rain_mm
+//
+// This ran ~38s before, which is longer than a phone widget will wait. Three
+// things were paying for that and all three are fixed below:
+//   1. it read EVERY row the sheet has ever held, then threw away all but
+//      today -> now reads only the tail (WIDGET_MAX_ROWS)
+//   2. it called Utilities.formatDate once PER ROW to test "is this today",
+//      and that call is expensive -> now computes the day boundary ONCE and
+//      compares plain millisecond values
+//   3. every widget refresh recomputed from scratch -> now cached, and
+//      doPost drops the cache when a new uplink lands
+var WIDGET_CACHE_KEY = "widget_payload_v1";
+var WIDGET_CACHE_SECONDS = 300;
+// Uplinks arrive roughly every 5 min (~288 rows/day). 600 still covers a full
+// day if the interval halves, and keeps the read small.
+var WIDGET_MAX_ROWS = 600;
+
+// Midnight-today in the script's timezone, as epoch ms. Computed once per
+// request instead of formatting every row's date.
+function startOfTodayMs_() {
+  var now = new Date();
+  var z = Utilities.formatDate(now, Session.getScriptTimeZone(), "Z"); // e.g. "+0200"
+  var sign = z.charAt(0) === "-" ? -1 : 1;
+  var offsetMs = sign * (parseInt(z.substr(1, 2), 10) * 60 + parseInt(z.substr(3, 2), 10)) * 60000;
+  var DAY_MS = 86400000;
+  return Math.floor((now.getTime() + offsetMs) / DAY_MS) * DAY_MS - offsetMs;
+}
+
 function doGet(e) {
   try {
+    var cache = CacheService.getScriptCache();
+    var cached = cache.get(WIDGET_CACHE_KEY);
+    if (cached) return jsonString(cached);
+
     var scriptProperties = PropertiesService.getScriptProperties();
     var sheetId = scriptProperties.getProperty("SHEET_ID");
     if (!sheetId) throw new Error("Sheet ID not found in Script Properties.");
@@ -100,49 +135,47 @@ function doGet(e) {
       return jsonOutput({ latest: null, today: [] });
     }
 
-    // Columns A, J, S, AB, AD -> 1, 10, 19, 28, 30
-    var numRows = lastRow - 1; // exclude header row
-    var values = sheet.getRange(2, 1, numRows, 30).getValues();
+    // Columns A, J, S, V, AB, AD -> 1, 10, 19, 22, 28, 30
+    var startRow = Math.max(2, lastRow - WIDGET_MAX_ROWS + 1);
+    var values = sheet.getRange(startRow, 1, lastRow - startRow + 1, 30).getValues();
 
-    var records = values.map(function (row) {
+    var dayStartMs = startOfTodayMs_();
+    var latest = null;
+    var today = [];
+
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
       var ts = row[0] instanceof Date ? row[0] : new Date(row[0]);
-      return {
-        timestamp: ts,
+      var ms = ts.getTime();
+      if (isNaN(ms)) continue;
+
+      var rec = {
+        timestamp: ts.toISOString(),
         temp_c: row[9] === "" ? null : row[9],
         light: row[18] === "" ? null : row[18],
+        wind_dir_deg: row[21] === "" ? null : row[21],
         wind_kmh: row[27] === "" ? null : row[27],
         rain_mm: row[29] === "" ? null : row[29]
       };
-    }).filter(function (r) {
-      return !isNaN(r.timestamp.getTime());
-    });
 
-    var latest = records.length ? records[records.length - 1] : null;
-
-    var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-    var today = records.filter(function (r) {
-      return Utilities.formatDate(r.timestamp, Session.getScriptTimeZone(), "yyyy-MM-dd") === todayStr;
-    });
-
-    function serialize(r) {
-      return {
-        timestamp: r.timestamp.toISOString(),
-        temp_c: r.temp_c,
-        light: r.light,
-        wind_kmh: r.wind_kmh,
-        rain_mm: r.rain_mm
-      };
+      latest = rec; // rows are chronological, so the last valid one wins
+      if (ms >= dayStartMs) today.push(rec);
     }
 
-    return jsonOutput({
-      latest: latest ? serialize(latest) : null,
-      today: today.map(serialize)
-    });
+    var body = JSON.stringify({ latest: latest, today: today });
+    // 100KB is the per-entry cache limit; a day of rows is ~35KB, but skip the
+    // put rather than throw if the sheet ever gets chattier.
+    if (body.length < 100000) cache.put(WIDGET_CACHE_KEY, body, WIDGET_CACHE_SECONDS);
+    return jsonString(body);
   } catch (error) {
     return jsonOutput({ error: error.message });
   }
 }
 
 function jsonOutput(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+  return jsonString(JSON.stringify(obj));
+}
+
+function jsonString(body) {
+  return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JSON);
 }
