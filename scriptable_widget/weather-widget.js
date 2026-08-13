@@ -27,7 +27,12 @@
 //      MEDIUM.
 
 const ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbxAX62uDNNXsPZ8dtsyTaL_p5Vmear12enFtOmN2TGXjbE1U9ExJVEVDA4DyfwfA7Ba/exec';
-const WIDGET_SIZE = [1014, 474]; // medium, 338x158pt at 3x
+// Medium widget, in POINTS. Do not pre-multiply this by the screen scale:
+// respectScreenScale = true already renders at 3x on a Retina phone. Passing
+// 1014x474 here meant a 9x bitmap (~3042x1422, ~17MB), which the in-app
+// preview tolerates but a widget extension does not — iOS kills it and
+// Scriptable reports "received timeout when running script".
+const WIDGET_SIZE = [338, 158];
 
 // ---- live data, with dummy fallback ----------------------------------------
 
