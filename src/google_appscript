@@ -84,3 +84,63 @@ function doPost(e) {
     return ContentService.createTextOutput("Error: " + error.message).setMimeType(ContentService.MimeType.TEXT);
   }
 }
+
+// Public read-only endpoint for the iPhone widget (Scriptable).
+// Returns { latest: {...}, today: [...] } built from columns:
+// A=timestamp, J=sht_temperature.avg, S=light_solar.avg, AB=wind.speed_kmh.avg
+function doGet(e) {
+  try {
+    var scriptProperties = PropertiesService.getScriptProperties();
+    var sheetId = scriptProperties.getProperty("SHEET_ID");
+    if (!sheetId) throw new Error("Sheet ID not found in Script Properties.");
+
+    var sheet = SpreadsheetApp.openById(sheetId).getSheetByName("Sheet1");
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return jsonOutput({ latest: null, today: [] });
+    }
+
+    // Columns A, J, S, AB -> 1, 10, 19, 28
+    var numRows = lastRow - 1; // exclude header row
+    var values = sheet.getRange(2, 1, numRows, 28).getValues();
+
+    var records = values.map(function (row) {
+      var ts = row[0] instanceof Date ? row[0] : new Date(row[0]);
+      return {
+        timestamp: ts,
+        temp_c: row[9] === "" ? null : row[9],
+        light: row[18] === "" ? null : row[18],
+        wind_kmh: row[27] === "" ? null : row[27]
+      };
+    }).filter(function (r) {
+      return !isNaN(r.timestamp.getTime());
+    });
+
+    var latest = records.length ? records[records.length - 1] : null;
+
+    var todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+    var today = records.filter(function (r) {
+      return Utilities.formatDate(r.timestamp, Session.getScriptTimeZone(), "yyyy-MM-dd") === todayStr;
+    });
+
+    function serialize(r) {
+      return {
+        timestamp: r.timestamp.toISOString(),
+        temp_c: r.temp_c,
+        light: r.light,
+        wind_kmh: r.wind_kmh
+      };
+    }
+
+    return jsonOutput({
+      latest: latest ? serialize(latest) : null,
+      today: today.map(serialize)
+    });
+  } catch (error) {
+    return jsonOutput({ error: error.message });
+  }
+}
+
+function jsonOutput(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
