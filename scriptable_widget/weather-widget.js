@@ -63,9 +63,11 @@ function buildDummyData() {
 
 async function fetchLiveData() {
   const req = new Request(ENDPOINT_URL);
-  // Apps Script /exec cold-starts routinely take 5-15s; a short timeout is
-  // indistinguishable from a broken endpoint, so give it room.
-  req.timeoutInterval = 30;
+  // Measured: this endpoint takes ~38s. doGet reads every row of the sheet
+  // and runs a per-row Utilities.formatDate to filter to today, so it is slow
+  // by construction; a cold start adds more. Anything under a minute here is
+  // indistinguishable from a broken endpoint.
+  req.timeoutInterval = 60;
   // loadString, not loadJSON: if the deployment's access is "Anyone with
   // Google account" the response is a Google sign-in HTML page, and loadJSON
   // fails with a generic parse error that hides the real cause.
