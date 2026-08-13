@@ -87,7 +87,7 @@ function doPost(e) {
 
 // Public read-only endpoint for the iPhone widget (Scriptable).
 // Returns { latest: {...}, today: [...] } built from columns:
-// A=timestamp, J=sht_temperature.avg, S=light_solar.avg, AB=wind.speed_kmh.avg
+// A=timestamp, J=sht_temperature.avg, S=light_solar.avg, AB=wind.speed_kmh.avg, AD=rain_mm
 function doGet(e) {
   try {
     var scriptProperties = PropertiesService.getScriptProperties();
@@ -100,9 +100,9 @@ function doGet(e) {
       return jsonOutput({ latest: null, today: [] });
     }
 
-    // Columns A, J, S, AB -> 1, 10, 19, 28
+    // Columns A, J, S, AB, AD -> 1, 10, 19, 28, 30
     var numRows = lastRow - 1; // exclude header row
-    var values = sheet.getRange(2, 1, numRows, 28).getValues();
+    var values = sheet.getRange(2, 1, numRows, 30).getValues();
 
     var records = values.map(function (row) {
       var ts = row[0] instanceof Date ? row[0] : new Date(row[0]);
@@ -110,7 +110,8 @@ function doGet(e) {
         timestamp: ts,
         temp_c: row[9] === "" ? null : row[9],
         light: row[18] === "" ? null : row[18],
-        wind_kmh: row[27] === "" ? null : row[27]
+        wind_kmh: row[27] === "" ? null : row[27],
+        rain_mm: row[29] === "" ? null : row[29]
       };
     }).filter(function (r) {
       return !isNaN(r.timestamp.getTime());
@@ -128,7 +129,8 @@ function doGet(e) {
         timestamp: r.timestamp.toISOString(),
         temp_c: r.temp_c,
         light: r.light,
-        wind_kmh: r.wind_kmh
+        wind_kmh: r.wind_kmh,
+        rain_mm: r.rain_mm
       };
     }
 
