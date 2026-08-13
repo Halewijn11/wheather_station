@@ -63,18 +63,33 @@ function buildDummyData() {
 
 async function fetchLiveData() {
   const req = new Request(ENDPOINT_URL);
-  req.timeoutInterval = 8;
-  const json = await req.loadJSON();
-  if (!json || !json.today || !json.today.length) throw new Error('empty response');
+  // Apps Script /exec cold-starts routinely take 5-15s; a short timeout is
+  // indistinguishable from a broken endpoint, so give it room.
+  req.timeoutInterval = 30;
+  // loadString, not loadJSON: if the deployment's access is "Anyone with
+  // Google account" the response is a Google sign-in HTML page, and loadJSON
+  // fails with a generic parse error that hides the real cause.
+  const body = await req.loadString();
+  const status = req.response ? req.response.statusCode : '?';
+  let json;
+  try {
+    json = JSON.parse(body);
+  } catch (e) {
+    const looksLikeLogin = /accounts\.google\.com|ServiceLogin|<html/i.test(body);
+    throw new Error(looksLikeLogin
+      ? `HTTP ${status}: got an HTML page, not JSON — the web app is probably deployed as "Anyone with Google account". Redeploy with access "Anyone".`
+      : `HTTP ${status}: response was not JSON — ${body.slice(0, 120)}`);
+  }
+  if (!json || !json.today || !json.today.length) throw new Error(`HTTP ${status}: JSON had no "today" rows`);
   return json;
 }
 
 async function loadData() {
   try {
-    return { data: await fetchLiveData(), live: true };
+    return { data: await fetchLiveData(), live: true, error: null };
   } catch (e) {
     console.log(`live fetch failed (${e}), using dummy data`);
-    return { data: buildDummyData(), live: false };
+    return { data: buildDummyData(), live: false, error: `${e && e.message ? e.message : e}` };
   }
 }
 
@@ -239,14 +254,14 @@ async function createWidgetImage(payload) {
 }
 
 async function createWidget() {
-  const { data, live } = await loadData();
+  const { data, live, error } = await loadData();
   const widget = new ListWidget();
   widget.backgroundColor = new Color('#000000');
   const img = widget.addImage(await createWidgetImage(data));
   img.applyFillingContentMode();
   if (!config.runsInWidget && !live) {
     widget.addSpacer(4);
-    const warn = widget.addText('⚠️ dummy data (live fetch failed)');
+    const warn = widget.addText(`⚠️ dummy data — ${error}`);
     warn.font = Font.systemFont(10);
     warn.textColor = new Color('#FF9999');
   }
