@@ -49,7 +49,8 @@ data worden in windroos pas opgenomen vanaf wind_max 3 km/h en dit voor beide ro
 st.subheader("Kalibraties")
 st.caption(
     "Log van sensorkalibraties, handmatig bijgehouden in het 'Kalibraties'-tabblad "
-    "van de Google Sheet (Datum, Kolom, Offset, Notitie)."
+    "van de Google Sheet (Datum, Kolom, Offset of Factor, Notitie). Per kolom wordt "
+    "ofwel Offset (optelling) ofwel Factor (vermenigvuldiging) gebruikt, nooit beide."
 )
 calibration_log = utils.get_calibration_log()
 if calibration_log.empty:

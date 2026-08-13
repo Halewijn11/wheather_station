@@ -571,7 +571,7 @@ CALIBRATION_OFFSET_SCALE = {
 
 def apply_calibration_offsets(df):
     """
-    Applies calibration offsets from the "Kalibraties" log (see
+    Applies calibration corrections from the "Kalibraties" log (see
     get_calibration_log()) to df's sensor columns. For each row, the most
     recent calibration entry for that column (by Datum, Europe/Brussels
     local) whose date is on or before the row's received_at is used - each
@@ -581,6 +581,13 @@ def apply_calibration_offsets(df):
     before any calibration for a column are left untouched. Returns a copy;
     the input df is not mutated. A no-op (returns df as-is) if the log is
     empty or df has no received_at column.
+
+    Each sensor column's log entries use either the "Offset" field
+    (additive: df[col] + Offset) or the "Factor" field (multiplicative:
+    df[col] * Factor), never both. A column whose log mixes the two is
+    treated as a data-entry conflict: that column's calibration is skipped
+    (raw values shown) and a warning is surfaced, rather than silently
+    guessing which correction to apply.
     """
     if df.empty or 'received_at' not in df.columns:
         return df
@@ -591,19 +598,39 @@ def apply_calibration_offsets(df):
     df = df.copy()
     tz = pytz.timezone('Europe/Brussels')
     local_date = df['received_at'].dt.tz_convert(tz).dt.normalize()
+    has_factor_col = 'Factor' in log.columns
 
     for col in log['Kolom'].dropna().unique():
         if col not in df.columns:
             continue
-        scale = CALIBRATION_OFFSET_SCALE.get(col, 1)
-        col_log = log[(log['Kolom'] == col) & log['Datum'].notna() & log['Offset'].notna()].sort_values('Datum')
-        if col_log.empty:
+        col_log = log[log['Kolom'] == col]
+        offset_log = col_log[col_log['Datum'].notna() & col_log['Offset'].notna()].sort_values('Datum')
+        factor_log = (
+            col_log[col_log['Datum'].notna() & col_log['Factor'].notna()].sort_values('Datum')
+            if has_factor_col else col_log.iloc[0:0]
+        )
+
+        if not offset_log.empty and not factor_log.empty:
+            st.warning(
+                f'Kalibratielog voor kolom "{col}" bevat zowel Offset- als '
+                f'Factor-rijen - kalibratie voor deze kolom wordt overgeslagen '
+                f'(ruwe waarden getoond) tot dit in de Kalibraties-sheet is opgelost.'
+            )
             continue
-        offsets = pd.Series(0.0, index=df.index)
-        for _, entry in col_log.iterrows():
-            entry_date_local = tz.localize(entry['Datum'].normalize())
-            offsets.loc[local_date >= entry_date_local] = float(entry['Offset']) * scale
-        df[col] = df[col] + offsets
+
+        if not factor_log.empty:
+            corrections = pd.Series(1.0, index=df.index)
+            for _, entry in factor_log.iterrows():
+                entry_date_local = tz.localize(entry['Datum'].normalize())
+                corrections.loc[local_date >= entry_date_local] = float(entry['Factor'])
+            df[col] = df[col] * corrections
+        elif not offset_log.empty:
+            scale = CALIBRATION_OFFSET_SCALE.get(col, 1)
+            corrections = pd.Series(0.0, index=df.index)
+            for _, entry in offset_log.iterrows():
+                entry_date_local = tz.localize(entry['Datum'].normalize())
+                corrections.loc[local_date >= entry_date_local] = float(entry['Offset']) * scale
+            df[col] = df[col] + corrections
 
     return df
 
@@ -675,11 +702,17 @@ def get_forecast_df():
 def get_calibration_log(sheet_id="1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q", sheet_name="Kalibraties"):
     """
     Reads the manually-maintained "Kalibraties" tab (columns: Datum, Kolom,
-    Offset, Notitie) from the main Google Sheet - a log of when each sensor
-    column was calibrated and by how much. The app has no write access to
-    Sheets, so this tab is maintained by hand; fetched by sheet name (not
-    gid) via the gviz endpoint so it keeps working if the tab gets reordered.
-    Returns an empty DataFrame (not an error) if the tab doesn't exist yet.
+    Offset, Notitie, plus an optional Factor column - see
+    apply_calibration_offsets()) from the main Google Sheet - a log of when
+    each sensor column was calibrated and by how much. The app has no write
+    access to Sheets, so this tab is maintained by hand; fetched by sheet
+    name (not gid) via the gviz endpoint so it keeps working if the tab gets
+    reordered. Returns an empty DataFrame (not an error) if the tab doesn't
+    exist yet.
+
+    "Factor" is deliberately left out of expected_cols: it's optional, so a
+    sheet that doesn't have that column yet still passes the sanity check
+    below and existing Offset-based calibrations keep working.
     """
     expected_cols = ['Datum', 'Kolom', 'Offset', 'Notitie']
     url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet={sheet_name}"
@@ -694,6 +727,8 @@ def get_calibration_log(sheet_id="1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q",
     if not set(expected_cols).issubset(df.columns):
         return pd.DataFrame(columns=expected_cols)
     df['Datum'] = pd.to_datetime(df['Datum'], errors='coerce')
+    if 'Factor' in df.columns:
+        df['Factor'] = pd.to_numeric(df['Factor'], errors='coerce')
     return df
 
 
