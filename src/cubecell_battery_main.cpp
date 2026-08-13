@@ -208,7 +208,7 @@ void setup() {
         Serial.println("ADS1115 Fail!");
         while (1);
     }
-    ads.setGain(GAIN_TWOTHIRDS); // Sets range to +/- 4.096V
+    ads.setGain(GAIN_ONE); // Sets range to +/- 4.096V, 0.125mV/step (matches Utils.cpp scale)
 
     if (!bmp.begin(0x76)) {
         Serial.println("BMP280 Fail!");
