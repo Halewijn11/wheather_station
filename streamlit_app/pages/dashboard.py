@@ -265,6 +265,13 @@ else:
         latest_light_val = df[light_avg_col].iloc[-1] if not df.empty else time_window_df[light_avg_col].iloc[-1]
         st.metric("Current", f"{latest_light_val:.1f} W/m²")
 
+        toa_now_w_m2 = utils.get_toa_solar_stats()['toa_now_w_m2']
+        if toa_now_w_m2 > 0:
+            current_clearness_pct = latest_light_val / toa_now_w_m2 * 100
+            st.caption(f"Helderheidsindex: {current_clearness_pct:.0f}%")
+        else:
+            st.caption("Helderheidsindex: N/A")
+
         energy_kwh, energy_mj = utils.compute_todays_solar_energy(df, col=light_avg_col)
         st.caption(f"Energie vandaag: {energy_kwh:.2f} kWh/m² ")
 
