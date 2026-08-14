@@ -1,6 +1,9 @@
 .pio
+knowledge_base/
+.claude/skills
 .vscode/.browse.c_cpp.db*
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
 *.pyc
+src/secrets.h
