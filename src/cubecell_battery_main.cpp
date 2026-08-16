@@ -89,16 +89,106 @@ uint8_t appPort = 2;
 uint8_t confirmedNbTrials = 4;
 
 /****************************************************
- * general wheather station PREAMBLE  
+ * TIME SYNC / DRIFT CORRECTION
+ ****************************************************/
+
+/*
+ * The CubeCell keeps time on an RC oscillator that drifts several seconds per
+ * day, so a fixed `LoRaWAN.cycle(5000)` slowly walks away from the wall clock.
+ *
+ * Two fixes here:
+ *  1. Ask the network server for the time with the LoRaWAN DeviceTimeReq MAC
+ *     command (MLME_DEVICE_TIME). The answer arrives in RX1/RX2 and the MAC
+ *     layer feeds it into TimerSetSysTime(), so TimerGetSysTime() returns real
+ *     Unix time. Re-requested periodically to correct ongoing drift.
+ *  2. Schedule every wake against that absolute clock instead of adding a fixed
+ *     delay to "now". Sleep length is recomputed each cycle as the distance to
+ *     the next MEASURE_INTERVAL_S boundary, so execution lag and oscillator
+ *     error are absorbed each cycle instead of accumulating.
+ */
+
+/* Sampling wakes align to these Unix-time boundaries. */
+const uint32_t MEASURE_INTERVAL_S = 5;
+/* An uplink is sent on every crossing of this Unix-time boundary. */
+const uint32_t REPORT_INTERVAL_S = 300;
+/* Never schedule a wake closer than this; leaves headroom for loop execution lag. */
+const uint32_t MIN_SLEEP_MS = 500;
+/* Re-request the network time after this many uplinks (288 * 5 min = 24 h). */
+const uint16_t RESYNC_AFTER_REPORTS = 288;
+
+/* False until the first DeviceTimeAns lands; until then we fall back to
+ * counting samples and sleeping a fixed interval. */
+bool timeSynced = false;
+/* Unix-time block index (seconds / REPORT_INTERVAL_S) of the last uplink. */
+uint32_t lastReportBlock = 0;
+/* Uplinks since the last successful time sync. */
+uint16_t reportsSinceSync = 0;
+/* Set when the next uplink should carry a DeviceTimeReq. */
+bool requestTimeOnNextTx = true;
+
+/*
+ * Overrides the weak stub in LoRaWan_APP.cpp. Called from MlmeConfirm() after
+ * the MAC layer has already applied the new system time, so TimerGetSysTime()
+ * is authoritative in here.
+ */
+void dev_time_updated() {
+    TimerSysTime_t now = TimerGetSysTime();
+    Serial.printf("[time] synced from network: unix %u.%03u\r\n",
+                  (unsigned int)now.Seconds, (unsigned int)now.SubSeconds);
+
+    /* Anchor the report schedule to the block we are in right now, otherwise
+     * the clock jump would look like a missed report and fire an uplink
+     * immediately after this one. */
+    lastReportBlock = now.Seconds / REPORT_INTERVAL_S;
+    reportsSinceSync = 0;
+    requestTimeOnNextTx = false;
+    timeSynced = true;
+}
+
+/*
+ * Milliseconds until the next Unix-time multiple of `intervalSeconds`.
+ * Skips forward whole intervals if the next boundary is too close to hit.
+ */
+static uint32_t msUntilNextBoundary(uint32_t intervalSeconds) {
+    TimerSysTime_t now = TimerGetSysTime();
+    uint32_t secondsPast = now.Seconds % intervalSeconds;
+    int32_t waitMs = (int32_t)(intervalSeconds - secondsPast) * 1000 - (int32_t)now.SubSeconds;
+
+    while (waitMs < (int32_t)MIN_SLEEP_MS) {
+        waitMs += (int32_t)(intervalSeconds * 1000);
+    }
+    return (uint32_t)waitMs;
+}
+
+/****************************************************
+ * general wheather station PREAMBLE
  ****************************************************/
 
 /* Weather Station Variables */
-uint32_t numSamples = 60; 
-uint32_t measurementInterval_s = 5;
+/* Only used as the pre-sync fallback; once synced the schedule is time-driven. */
+uint32_t numSamples = REPORT_INTERVAL_S / MEASURE_INTERVAL_S;
+uint32_t measurementInterval_s = MEASURE_INTERVAL_S;
 // for testing
-// uint32_t numSamples = 2; 
+// uint32_t numSamples = 2;
 // uint32_t measurementInterval_s = 10;
 int sampleCount = 0;
+
+/*
+ * True when a new REPORT_INTERVAL_S block has been entered since the last
+ * uplink. Comparing block indices (rather than counting samples) keeps the
+ * schedule correct even if a wake is missed or the clock is stepped.
+ */
+static bool isReportDue() {
+    if (!timeSynced) {
+        return sampleCount >= (int)numSamples;
+    }
+    uint32_t block = TimerGetSysTime().Seconds / REPORT_INTERVAL_S;
+    if (block == lastReportBlock) {
+        return false;
+    }
+    lastReportBlock = block;
+    return true;
+}
 
 // Fan Specifics (disabled - no PWM/tachometer)
 // Adafruit_PWMServoDriver pwmBoard = Adafruit_PWMServoDriver();
@@ -321,13 +411,28 @@ void loop() {
             sampleCount++;
 
             // 2. Check if it is time to Uplink
-            if (sampleCount >= numSamples) {
+            if (isReportDue()) {
+                // Piggyback a DeviceTimeReq on this uplink when the clock is
+                // unsynced or stale. The answer arrives in RX1/RX2 and lands in
+                // dev_time_updated().
+                if (!timeSynced || requestTimeOnNextTx) {
+                    MlmeReq_t mlmeReq;
+                    mlmeReq.Type = MLME_DEVICE_TIME;
+                    LoRaMacMlmeRequest(&mlmeReq);
+                    Serial.println("[time] DeviceTimeReq attached to this uplink");
+                }
+
                 // Read battery voltage once before sending
                 // Read battery voltage from ADS1115 channel A3 (0.1875 mV/bit at default gain)
                 // battery_voltage_mv = (uint16_t)(ads.readADC_SingleEnded(3) * 0.1875f);
                 battery_voltage_mv = getBatteryVoltage();
                 prepareTxFrame(appPort);
                 LoRaWAN.send();
+
+                if (timeSynced && ++reportsSinceSync >= RESYNC_AFTER_REPORTS) {
+                    Serial.println("[time] sync is stale, will re-request next uplink");
+                    requestTimeOnNextTx = true;
+                }
                 //reset the values
 
                 sampleCount = 0;
@@ -351,7 +456,16 @@ void loop() {
             break;
         }
         case DEVICE_STATE_CYCLE: {
-            txDutyCycleTime = measurementInterval_s * 1000;
+            if (timeSynced) {
+                // Sleep to the next absolute boundary, so lag and oscillator
+                // error are cancelled every cycle instead of accumulating.
+                txDutyCycleTime = msUntilNextBoundary(MEASURE_INTERVAL_S);
+            } else {
+                // No network time yet: plain fixed interval.
+                txDutyCycleTime = measurementInterval_s * 1000;
+            }
+            Serial.printf("[time] next wake in %u ms (synced=%d)\r\n",
+                          (unsigned int)txDutyCycleTime, (int)timeSynced);
             LoRaWAN.cycle(txDutyCycleTime);
             deviceState = DEVICE_STATE_SLEEP;
             break;
