@@ -201,7 +201,20 @@ function drawWidget(dc, W, H, { latest, today }) {
   const idx = downsampleIdx(N, 6);
   const tempAll = today.map(r => r.temp_c);
   const temps = idx.map(i => tempAll[i]);
-  const rains = idx.map(i => today[i].rain_mm);
+
+  // rain_mm is a per-record delta (rain since the last ~5min report), not a
+  // running total -- see payload_formatter and doPost. Reading it off just
+  // the 6 sampled rows (like temps do) drops almost every record's rain, so
+  // instead each bar SUMS rain_mm over its slice of the day, bucketed around
+  // the same 6 marks used for temp/hour labels.
+  const bucketEdges = [0];
+  for (let i = 0; i < idx.length - 1; i++) bucketEdges.push(Math.round((idx[i] + idx[i + 1]) / 2));
+  bucketEdges.push(N);
+  const rains = idx.map((_, i) => {
+    let sum = 0;
+    for (let j = bucketEdges[i]; j < bucketEdges[i + 1]; j++) sum += today[j].rain_mm;
+    return Math.round(sum * 10) / 10;
+  });
 
   const chartX = 26 * s, chartW = W - 2 * chartX;
   const lineTop = 68 * s, lineH = 36 * s;
