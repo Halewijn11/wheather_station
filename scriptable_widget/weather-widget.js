@@ -203,7 +203,10 @@ function drawWidget(dc, W, H, { latest, today }) {
   //   rain labels  133–144pt   "0.2" etc
   //   hour labels  145–157pt   "20:00" etc, bottom row
   const s = W / 338; // scale from design pt-space to this widget's actual pixels
-  fillRoundedRect(dc, 0, 0, W, H, '#1f4e8c', 24 * s);
+  // Full-bleed, NO corner radius of our own: iOS masks the widget's corners
+  // itself. Rounding here too left the corners transparent, so the widget's
+  // backgroundColor showed through as dark wedges at each corner.
+  fillRoundedRect(dc, 0, 0, W, H, '#1f4e8c', 0);
 
   drawText(dc, 'Weather Station', 16 * s, 4 * s, 200 * s, 16 * s, '#ffffff', 13 * s, 'bold');
   drawText(dc, `${latest.temp_c.toFixed(0)}°`, 16 * s, 20 * s, 140 * s, 30 * s, '#ffffff', 24 * s, 'bold');
@@ -307,11 +310,19 @@ async function createWidgetImage(payload) {
 async function createWidget() {
   const { data, live, error } = await loadData();
   const widget = new ListWidget();
-  widget.backgroundColor = new Color('#000000');
-  const img = widget.addImage(await createWidgetImage(data));
-  img.applyFillingContentMode();
+  // backgroundImage, not addImage: a ListWidget applies its own default
+  // padding (~11-16pt) to its CONTENT, so an added image is inset on all four
+  // sides and the widget's backgroundColor shows through as a border — the
+  // black frame around the card. backgroundImage bypasses the content area and
+  // fills the whole widget edge to edge. setPadding(0,...) additionally lets
+  // the not-in-widget fallback text sit flush.
+  widget.backgroundColor = new Color('#1f4e8c');
+  widget.backgroundImage = await createWidgetImage(data);
+  widget.setPadding(0, 0, 0, 0);
   if (!config.runsInWidget && !live) {
-    widget.addSpacer(4);
+    // the image is now the BACKGROUND, so this text overlays it; push it to
+    // the bottom edge instead of floating over the header.
+    widget.addSpacer();
     const warn = widget.addText(`⚠️ dummy data — ${error}`);
     warn.font = Font.systemFont(10);
     warn.textColor = new Color('#FF9999');
