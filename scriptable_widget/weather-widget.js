@@ -27,12 +27,43 @@
 //      MEDIUM.
 
 const ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbxAX62uDNNXsPZ8dtsyTaL_p5Vmear12enFtOmN2TGXjbE1U9ExJVEVDA4DyfwfA7Ba/exec';
-// Medium widget, in POINTS. Do not pre-multiply this by the screen scale:
-// respectScreenScale = true already renders at 3x on a Retina phone. Passing
-// 1014x474 here meant a 9x bitmap (~3042x1422, ~17MB), which the in-app
-// preview tolerates but a widget extension does not — iOS kills it and
-// Scriptable reports "received timeout when running script".
-const WIDGET_SIZE = [338, 158];
+
+// Medium widget size, in POINTS — varies per iPhone model (e.g. 338x158 on a
+// 12/13, 364x170 on a 12/13 Pro Max, 344x162 on a 16 Pro). A single hardcoded
+// size only matches the model it was measured on; on any other phone iOS
+// letterboxes the image inside the actual (differently-sized) widget slot,
+// which is the black-bar gap seen around the widget on non-matching devices.
+// Device.screenSize() (in points) keys into the per-device-class table below;
+// unrecognized devices fall back to the 12/13 size. Source: widget sizes are
+// fixed per screen-size class, not derivable from screenSize() by formula —
+// see https://github.com/simonbs/ios-widget-sizes.
+// Do not pre-multiply this by the screen scale: respectScreenScale = true
+// already renders at 3x on a Retina phone. Passing an already-3x-scaled size
+// here meant a 9x bitmap (~3042x1422, ~17MB), which the in-app preview
+// tolerates but a widget extension does not — iOS kills it and Scriptable
+// reports "received timeout when running script".
+const MEDIUM_WIDGET_SIZE_BY_SCREEN_PT = {
+  '320x568': [291, 141], // SE (1st gen), iPod touch 7
+  '375x667': [321, 148], // 6s/7/8, SE (2nd/3rd gen)
+  '414x736': [348, 157], // 6s/7/8 Plus
+  '375x812': [329, 155], // X/Xs, 11 Pro
+  '414x896': [360, 169], // Xr/Xs Max, 11/11 Pro Max
+  '360x780': [329, 155], // 12 mini, 13 mini
+  '390x844': [338, 158], // 12, 12 Pro, 13, 13 Pro, 14
+  '428x926': [364, 170], // 12 Pro Max, 13 Pro Max, 14 Plus
+  '393x852': [338, 158], // 14 Pro, 15, 15 Pro, 16, 16e
+  '430x932': [364, 170], // 14 Pro Max, 15 Pro Max, 16 Plus
+  '402x874': [344, 162], // 16 Pro, 17 Pro
+  '440x956': [364, 170], // 16 Pro Max, 17 Pro Max (unconfirmed, Pro-Max-class fallback)
+};
+
+function getMediumWidgetSize() {
+  const { width, height } = Device.screenSize();
+  const key = width < height ? `${width}x${height}` : `${height}x${width}`;
+  return MEDIUM_WIDGET_SIZE_BY_SCREEN_PT[key] || [338, 158];
+}
+
+const WIDGET_SIZE = getMediumWidgetSize();
 
 // ---- live data, with dummy fallback ----------------------------------------
 
