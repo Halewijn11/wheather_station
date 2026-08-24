@@ -196,12 +196,16 @@ function drawWidget(dc, W, H, { latest, today }) {
   // every element has a disjoint vertical range and can never overlap
   // another regardless of the data's range:
   //   header         4–50pt    location + big temp (left), wind badge (right)
-  //   temp line     68–104pt   full-res line + dots on the 6 marks; each
+  //   temp line     68–102pt   full-res line + dots on the 6 marks; each
   //                            label rides above its OWN datapoint (tracking
   //                            the line, not a fixed row) -> labels 50–99pt
-  //   rain bars    112–130pt   own band — never overlaps the temp line
-  //   rain labels  133–144pt   "0.2" etc
-  //   hour labels  145–157pt   "20:00" etc, bottom row
+  //   rain bars    106–124pt   own band — never overlaps the temp line
+  //   rain labels  127–138pt   "0.2" etc
+  //   hour labels  139–151pt   "20:00" etc, bottom row
+  //
+  // The bottom row stops 7pt short of the edge and the chart is inset 34pt
+  // horizontally: iOS masks the widget with a ~24pt corner radius, so the
+  // first and last hour labels used to be clipped by the bottom corner arcs.
   const s = W / 338; // scale from design pt-space to this widget's actual pixels
   // Full-bleed, NO corner radius of our own: iOS masks the widget's corners
   // itself. Rounding here too left the corners transparent, so the widget's
@@ -250,10 +254,10 @@ function drawWidget(dc, W, H, { latest, today }) {
     return Math.round(sum * 10) / 10;
   });
 
-  const chartX = 26 * s, chartW = W - 2 * chartX;
-  const lineTop = 68 * s, lineH = 36 * s;
-  const rainBase = 130 * s, maxBarH = 18 * s, barW = 20 * s;
-  const rainLabelY = 133 * s, rainLabelH = 11 * s, hourLabelY = 145 * s, hourLabelH = 12 * s;
+  const chartX = 34 * s, chartW = W - 2 * chartX;
+  const lineTop = 68 * s, lineH = 34 * s;
+  const rainBase = 124 * s, maxBarH = 18 * s, barW = 20 * s;
+  const rainLabelY = 127 * s, rainLabelH = 11 * s, hourLabelY = 139 * s, hourLabelH = 12 * s;
   const labelW = chartW / 6;
   const xOf = i => chartX + (N > 1 ? (i / (N - 1)) * chartW : chartW / 2);
 
