@@ -8,7 +8,7 @@ A LoRaWAN weather station using a Heltec CubeCell (ASR6501) that transmits senso
 
 **Data flow:** CubeCell firmware → LoRaWAN (EU868) → TTN → TTN Webhook → Google Apps Script → Google Sheets → Streamlit app
 
-The active source file is controlled per environment via `build_src_filter` in `platformio.ini`. The `CubeCell-AB01` env currently builds `cubecell_timing_test_stripped_calibration.cpp`, but the production firmware is `src/cubecell_battery_main.cpp`.
+The active source file is controlled per environment via `build_src_filter` in `platformio.ini`. The `CubeCell-AB01` env builds `src/cubecell_battery_main.cpp`, which is the production firmware.
 
 ## Communication style
 - Use caveman mode (full) for all internal thinking, code comments, debugging and reasoning.
