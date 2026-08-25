@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "SF Pro Rounded", ui-rounded, -apple-system, "SF Pro Text", system-ui, sans-serif; }
+    .card {
+      width: 364px; height: 170px;
+      background: #17558F;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.16);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: row;
+      gap: 14px;
+      color: #fff;
+      overflow: hidden;
+    }
+    .label {
+      font-size: 8px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.6);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .value {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .cell {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 3px;
+    }
+    .cell-row {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+    }
+    .icon { flex-shrink: 0; }
+    .divider {
+      width: 1px;
+      align-self: stretch;
+      background: rgba(255,255,255,0.16);
+    }
+  </style>
+</helmet>
+<div class="card">
+
+  <div style="display:flex; flex-direction:column; justify-content:center; gap:10px; width:92px; flex-shrink:0;">
+    <div style="display:flex; flex-direction:column; gap:1px;">
+      <div style="font-size:40px; font-weight:800; letter-spacing:-1px; color:#F5A623; line-height:1;">24°C</div>
+      <div class="label">Temp</div>
+    </div>
+
+    <div class="cell-row">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="18" x2="21" y2="18"/>
+        <path d="M6 18a6 6 0 0 1 12 0"/>
+        <line x1="12" y1="9" x2="12" y2="2"/>
+        <polyline points="8 6 12 2 16 6"/>
+      </svg>
+      <div style="display:flex; flex-direction:column;">
+        <div class="value" style="font-size:11px;">06:24</div>
+        <div class="label">Sunrise</div>
+      </div>
+    </div>
+
+    <div class="cell-row">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="18" x2="21" y2="18"/>
+        <path d="M6 18a6 6 0 0 1 12 0"/>
+        <line x1="12" y1="2" x2="12" y2="9"/>
+        <polyline points="8 5 12 9 16 5"/>
+      </svg>
+      <div style="display:flex; flex-direction:column;">
+        <div class="value" style="font-size:11px;">20:41</div>
+        <div class="label">Sunset</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div style="flex-grow:1; display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0,1fr)); gap: 8px 10px; align-content:center;">
+
+    <div class="cell">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3s7 7.5 7 12a7 7 0 0 1-14 0c0-4.5 7-12 7-12z"/>
+      </svg>
+      <div class="value">58%</div>
+      <div class="label">Humidity</div>
+    </div>
+
+    <div class="cell">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 8h12a3 3 0 1 0-3-3"/>
+        <path d="M3 12.5h15a3 3 0 1 1-3 3"/>
+        <path d="M3 17h9"/>
+      </svg>
+      <div class="value">14 km/h</div>
+      <div class="label">Wind</div>
+    </div>
+
+    <div class="cell">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/>
+        <g transform="rotate(-22 12 12)">
+          <line x1="12" y1="12" x2="12" y2="5"/>
+          <polyline points="9 8 12 5 15 8"/>
+        </g>
+        <circle cx="12" cy="12" r="1" fill="#fff" stroke="none"/>
+      </svg>
+      <div class="value">NNW</div>
+      <div class="label">Direction</div>
+    </div>
+
+    <div class="cell">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="13" r="8"/>
+        <line x1="12" y1="13" x2="15.5" y2="9.5"/>
+        <line x1="12" y1="6.5" x2="12" y2="7.5"/>
+        <line x1="5.5" y1="13" x2="6.5" y2="13"/>
+      </svg>
+      <div class="value">1013 hPa</div>
+      <div class="label">Pressure</div>
+    </div>
+
+    <div class="cell">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4"/>
+        <line x1="12" y1="2" x2="12" y2="5"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+        <line x1="2" y1="12" x2="5" y2="12"/>
+        <line x1="19" y1="12" x2="22" y2="12"/>
+        <line x1="4.9" y1="4.9" x2="7" y2="7"/>
+        <line x1="17" y1="17" x2="19.1" y2="19.1"/>
+        <line x1="4.9" y1="19.1" x2="7" y2="17"/>
+        <line x1="17" y1="7" x2="19.1" y2="4.9"/>
+      </svg>
+      <div class="value">12.4k lx</div>
+      <div class="label">Light</div>
+    </div>
+
+    <div class="cell">
+      <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 15a4 4 0 0 1 .5-7.9A5.5 5.5 0 0 1 18 9.5 3.5 3.5 0 0 1 17.5 16H7z"/>
+        <line x1="9" y1="19" x2="9" y2="21"/>
+        <line x1="13" y1="19" x2="13" y2="21"/>
+      </svg>
+      <div class="value">2.4 mm</div>
+      <div class="label">Rain</div>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

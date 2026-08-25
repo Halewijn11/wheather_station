@@ -1,0 +1,11 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 60, "w": 404, "h": 210 },
+    { "file": "NoDivider.dc.html", "x": 460, "y": 60, "w": 404, "h": 210 }
+  ],
+  "annotations": [
+    { "id": "note-main", "x": 0, "y": -20, "w": 404, "text": "With divider — deep blue #17558F, amber temp only, white 60% labels, wind pill top-right of grid." },
+    { "id": "note-nodiv", "x": 460, "y": -20, "w": 404, "text": "No divider — same re-skin, grouping by spacing alone instead of the vertical line." }
+  ],
+  "launch": { "view": "canvas" }
+}

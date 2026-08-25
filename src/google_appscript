@@ -88,10 +88,17 @@ function doPost(e) {
   }
 }
 
-// Public read-only endpoint for the iPhone widget (Scriptable).
+// Public read-only endpoint for the iPhone widgets (Scriptable).
 // Returns { latest: {...}, today: [...] } built from columns:
-// A=timestamp, J=sht_temperature.avg, S=light_solar.avg, V=wind.direction_deg,
-// AB=wind.speed_kmh.avg, AD=rain_mm
+// A=timestamp, J=sht_temperature.avg, M=sht_humidity.avg, P=pressure_pa.avg,
+// S=light_solar.avg, V=wind.direction_deg, AB=wind.speed_kmh.avg, AD=rain_mm
+//
+// Deliberately ONE generic endpoint carrying the full sensor field set per
+// row, rather than a per-widget projection: a new widget (light-over-time,
+// pressure-over-time, ...) then needs no backend change. The range read below
+// already pulls all 30 columns, so extra fields cost nothing but JSON size.
+// Bump WIDGET_CACHE_KEY whenever a field is added, else a cached response
+// from the previous shape is served to a widget that needs the new field.
 //
 // This ran ~38s before, which is longer than a phone widget will wait. Three
 // things were paying for that and all three are fixed below:
@@ -102,7 +109,7 @@ function doPost(e) {
 //      compares plain millisecond values
 //   3. every widget refresh recomputed from scratch -> now cached, and
 //      doPost drops the cache when a new uplink lands
-var WIDGET_CACHE_KEY = "widget_payload_v1";
+var WIDGET_CACHE_KEY = "widget_payload_v2";
 var WIDGET_CACHE_SECONDS = 300;
 // Uplinks arrive roughly every 5 min (~288 rows/day). 600 still covers a full
 // day if the interval halves, and keeps the read small.
@@ -135,7 +142,7 @@ function doGet(e) {
       return jsonOutput({ latest: null, today: [] });
     }
 
-    // Columns A, J, S, V, AB, AD -> 1, 10, 19, 22, 28, 30
+    // Columns A, J, M, P, S, V, AB, AD -> 1, 10, 13, 16, 19, 22, 28, 30
     var startRow = Math.max(2, lastRow - WIDGET_MAX_ROWS + 1);
     var values = sheet.getRange(startRow, 1, lastRow - startRow + 1, 30).getValues();
 
@@ -152,6 +159,8 @@ function doGet(e) {
       var rec = {
         timestamp: ts.toISOString(),
         temp_c: row[9] === "" ? null : row[9],
+        humidity: row[12] === "" ? null : row[12],
+        pressure_pa: row[15] === "" ? null : row[15],
         light: row[18] === "" ? null : row[18],
         wind_dir_deg: row[21] === "" ? null : row[21],
         wind_kmh: row[27] === "" ? null : row[27],
