@@ -115,6 +115,15 @@ const uint32_t REPORT_INTERVAL_S = 300;
 const uint32_t MIN_SLEEP_MS = 500;
 /* Re-request the network time after this many uplinks (288 * 5 min = 24 h). */
 const uint16_t RESYNC_AFTER_REPORTS = 288;
+/* GPS time is ahead of UTC by this many leap seconds (18 since 2017-01-01).
+ * The CubeCell MAC applies only the GPS->Unix epoch offset in
+ * SRV_MAC_DEVICE_TIME_ANS, so the system clock lands 18 s in the future
+ * unless we subtract this. Bump if IERS adds another leap second. */
+const uint32_t GPS_UTC_LEAP_SECONDS = 18;
+/* Phase offset of the whole wake grid: wakes/uplinks happen this many seconds
+ * after each Unix-time boundary, so the report reaches TTN just AFTER the
+ * 5-minute mark, never before. */
+const uint32_t SCHEDULE_OFFSET_S = 5;
 
 /* False until the first DeviceTimeAns lands; until then we fall back to
  * counting samples and sleeping a fixed interval. */
@@ -126,6 +135,12 @@ uint16_t reportsSinceSync = 0;
 /* Set when the next uplink should carry a DeviceTimeReq. */
 bool requestTimeOnNextTx = true;
 
+/* Unix-time block index (seconds / REPORT_INTERVAL_S), shifted by the wake
+ * grid's phase offset so block N starts at N*REPORT_INTERVAL_S + SCHEDULE_OFFSET_S. */
+static uint32_t currentReportBlock() {
+    return (TimerGetSysTime().Seconds - SCHEDULE_OFFSET_S) / REPORT_INTERVAL_S;
+}
+
 /*
  * Overrides the weak stub in LoRaWan_APP.cpp. Called from MlmeConfirm() after
  * the MAC layer has already applied the new system time, so TimerGetSysTime()
@@ -133,13 +148,15 @@ bool requestTimeOnNextTx = true;
  */
 void dev_time_updated() {
     TimerSysTime_t now = TimerGetSysTime();
+    now.Seconds -= GPS_UTC_LEAP_SECONDS;   /* GPS -> UTC */
+    TimerSetSysTime(now);
     Serial.printf("[time] synced from network: unix %u.%03u\r\n",
                   (unsigned int)now.Seconds, (unsigned int)now.SubSeconds);
 
     /* Anchor the report schedule to the block we are in right now, otherwise
      * the clock jump would look like a missed report and fire an uplink
      * immediately after this one. */
-    lastReportBlock = now.Seconds / REPORT_INTERVAL_S;
+    lastReportBlock = currentReportBlock();
     reportsSinceSync = 0;
     requestTimeOnNextTx = false;
     timeSynced = true;
@@ -151,7 +168,8 @@ void dev_time_updated() {
  */
 static uint32_t msUntilNextBoundary(uint32_t intervalSeconds) {
     TimerSysTime_t now = TimerGetSysTime();
-    uint32_t secondsPast = now.Seconds % intervalSeconds;
+    uint32_t shiftedSeconds = now.Seconds + intervalSeconds - (SCHEDULE_OFFSET_S % intervalSeconds);
+    uint32_t secondsPast = shiftedSeconds % intervalSeconds;
     int32_t waitMs = (int32_t)(intervalSeconds - secondsPast) * 1000 - (int32_t)now.SubSeconds;
 
     while (waitMs < (int32_t)MIN_SLEEP_MS) {
@@ -182,7 +200,7 @@ static bool isReportDue() {
     if (!timeSynced) {
         return sampleCount >= (int)numSamples;
     }
-    uint32_t block = TimerGetSysTime().Seconds / REPORT_INTERVAL_S;
+    uint32_t block = currentReportBlock();
     if (block == lastReportBlock) {
         return false;
     }

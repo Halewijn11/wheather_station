@@ -1,0 +1,5 @@
+interface:
+  display_name: "Paper Wayfinder"
+  short_description: "Map a paper as decision and draft tickets"
+policy:
+  allow_implicit_invocation: false
