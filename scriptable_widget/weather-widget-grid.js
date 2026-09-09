@@ -201,8 +201,10 @@ function cardinal(deg) {
 function has(v) { return v !== null && v !== undefined && v !== '' && !isNaN(v); }
 function fmt(v, f) { return has(v) ? f(Number(v)) : '--'; }
 
+// Approximate daylight conversion (lux / 120); factor varies by light source.
+const LUX_TO_WM2 = 1 / 120;
 function fmtLight(lx) {
-  return lx >= 1000 ? `${(lx / 1000).toFixed(1)}k lx` : `${lx.toFixed(0)} lx`;
+  return `${(lx * LUX_TO_WM2).toFixed(0)} W/m²`;
 }
 
 // rain = today's total, not the latest 5-minute delta (see header note).
