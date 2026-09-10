@@ -4,6 +4,8 @@ import utils
 importlib.reload(utils)
 import pandas as pd
 
+st.set_page_config(page_title="Weather Station")
+
 # --- PAGE SETUP ---
 dashboard_page = st.Page(
     "pages/dashboard.py",
