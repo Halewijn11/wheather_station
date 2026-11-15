@@ -14,6 +14,7 @@ import calendar
 import uuid
 import json
 import time
+import threading
 from urllib.request import urlopen
 from pandas.tseries.frequencies import to_offset
 
@@ -678,10 +679,51 @@ def show_last_datapoint_caption(df):
         st.caption("Last datapoint on: N/A")
 
 
+_DATA_EXPORT_URL = "https://docs.google.com/spreadsheets/d/1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q/export?format=csv&gid=0"
+_FULL_REFRESH_S = 6 * 3600  # re-download the whole sheet this often (picks up edited/deleted rows)
+_OVERLAP_ROWS = 3           # re-request last known rows; Google returns the WHOLE sheet if range starts past the end
+
+
+@st.cache_resource
+def _raw_store():
+    """Process-wide holder for the raw sheet df, so refreshes can be incremental."""
+    return {'df': None, 'full_at': 0.0, 'lock': threading.Lock()}
+
+
+def _fetch_raw_sheet():
+    """
+    Raw sheet df. Full CSV download (~4s, 12MB) only on first call / every
+    _FULL_REFRESH_S; otherwise fetch just the newest rows via the export
+    `range` param (~1s) and append. Any hiccup falls back to a full download.
+    """
+    store = _raw_store()
+    with store['lock']:
+        df = store['df']
+        if df is not None and time.time() - store['full_at'] < _FULL_REFRESH_S:
+            try:
+                first_row = max(len(df) + 2 - _OVERLAP_ROWS, 2)  # sheet row 1 = header
+                new = pd.read_csv(
+                    f"{_DATA_EXPORT_URL}&range=A{first_row}:AD",
+                    header=None, names=df.columns,
+                )
+                # If range was past the end Google returns the full sheet incl. header -> bail to full.
+                if not (new['received_at'] == 'received_at').any() and len(new) <= 10_000:
+                    last_known = pd.to_datetime(df['received_at'].iloc[-1], utc=True)
+                    new = new[pd.to_datetime(new['received_at'], utc=True) > last_known]
+                    if not new.empty:
+                        df = pd.concat([df, new.astype(df.dtypes.to_dict(), errors='ignore')], ignore_index=True)
+                        store['df'] = df
+                    return df
+            except Exception:
+                pass
+        df = pd.read_csv(_DATA_EXPORT_URL)
+        store['df'], store['full_at'] = df, time.time()
+        return df
+
+
 @st.cache_data(ttl=3*60, show_spinner="Data ophalen...")
 def get_data(discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
-    export_url = "https://docs.google.com/spreadsheets/d/1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q/export?format=csv&gid=0"
-    google_sheet_df = pd.read_csv(export_url)
+    google_sheet_df = _fetch_raw_sheet()
     df = tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=num_batteries, voltage_col=voltage_col)
     return df
 
