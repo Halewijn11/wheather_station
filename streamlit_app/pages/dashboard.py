@@ -448,12 +448,11 @@ def rain_total(frame, window_label):
 
 rain_col1, rain_col2 = st.columns([1, 2])
 with rain_col1:
-    current_rain = df["rain_mm"].iloc[-1] if not df.empty else None
-    if current_rain is not None and pd.notna(current_rain):
-        st.metric("Current", f"{current_rain:.1f} mm")
-
     st.metric("Rain Today", f"{rain_total(df, 'Since Midnight'):.1f} mm")
     st.metric("Rain Last 24h", f"{rain_total(df, 'Last 24 Hours'):.1f} mm")
+    now_local = datetime.now(pytz.timezone('Europe/Brussels'))
+    rain_month_mm = utils.compute_daily_rain(df, now_local.year, now_local.month)['rain_mm'].sum()
+    st.metric("Rain This Month", f"{rain_month_mm:.1f} mm")
 
 with rain_col2:
     if time_window_df.empty:
