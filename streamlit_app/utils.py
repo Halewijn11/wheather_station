@@ -649,11 +649,14 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, volt
     df['received_at_td_minutes'] = df['received_at_td_seconds']/60
     now = pd.Timestamp.now(tz='UTC')
     df['seconds_since_now'] = (now - df['received_at']).dt.total_seconds()
-    df['battery_percentage'] = df.apply(
-    lambda row: calculate_stage_of_charge(discharge_curve, num_batteries, row[voltage_col])
-    if pd.notnull(row[voltage_col]) else np.nan,
-    axis=1
-    )
+    # Vectorised equivalent of calculate_stage_of_charge() (interp + int truncation); NaN stays NaN.
+    curve_sorted = discharge_curve.sort_values('voltage')
+    df['battery_percentage'] = np.trunc(np.interp(
+        df[voltage_col] / num_batteries,
+        curve_sorted['voltage'].values,
+        curve_sorted['stage_of_charge'].values,
+    ))
+    df.loc[df[voltage_col].isna(), 'battery_percentage'] = np.nan
 
     # Sensor noise shows up as tiny non-zero readings at night; treat anything below 1 as 0.
     for col in ('light_intensity_avg', 'light_intensity_max', 'light_intensity_min'):
@@ -662,7 +665,6 @@ def tidy_google_sheet_df(google_sheet_df, discharge_curve, num_batteries=1, volt
 
     return df
 
-@st.cache_data(ttl = 3*60)
 def show_last_datapoint_caption(df):
     """Renders 'Last datapoint on: ...' (Europe/Brussels local time) as a caption."""
     last_datapoint = df['received_at'].max()
@@ -676,6 +678,7 @@ def show_last_datapoint_caption(df):
         st.caption("Last datapoint on: N/A")
 
 
+@st.cache_data(ttl=3*60, show_spinner="Data ophalen...")
 def get_data(discharge_curve, num_batteries=1, voltage_col='voltage_bat'):
     export_url = "https://docs.google.com/spreadsheets/d/1yW0NiWeuWjEp08eymjFQ62CqKhSegNa_FXcgl68Kf4Q/export?format=csv&gid=0"
     google_sheet_df = pd.read_csv(export_url)
