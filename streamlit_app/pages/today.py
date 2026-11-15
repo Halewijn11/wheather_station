@@ -15,7 +15,7 @@ discharge_csv_path = os.path.join(asset_path, 'LiPo_smooth_discharge_curve.csv')
 discharge_curve = pd.read_csv(discharge_csv_path)
 df = utils.get_data(discharge_curve)
 
-st.title("Dashboard Today")
+st.title("Today")
 
 datapoint_col, refresh_col = st.columns([3, 1], vertical_alignment="center")
 with datapoint_col:
