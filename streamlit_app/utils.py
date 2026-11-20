@@ -1227,11 +1227,40 @@ def get_battery_icon_filepath(percentage, image_repo = './', flat = False):
     
 
 
-def get_moonphase_filepath(image_repo = './'):
+def get_lunation_fraction():
+    """Position in the lunar cycle, 0 = new moon, 0.5 = full moon, back to 1 = new moon."""
     # Reference New Moon (Jan 6, 2000)
     diff = datetime.now() - datetime(2000, 1, 6, 18, 14)
     days = diff.total_seconds() / 86400
-    lunation = days % 29.530588853
+    return (days % 29.530588853) / 29.530588853
+
+
+def moon_phase_svg_uri(fraction):
+    """
+    Data-URI SVG of the moon at lunation `fraction` (0..1), northern hemisphere
+    (waxing = lit on the right). Drawn from the real phase, so unlike the
+    8 fixed PNGs it also matches the illumination % exactly.
+    """
+    c = np.cos(2 * np.pi * fraction)
+    rx = 24 * abs(c)
+    waxing = fraction < 0.5
+    # lit region = outer half-circle + terminator ellipse arc back to the top
+    if waxing:
+        outer, sweep = 1, (0 if c > 0 else 1)
+    else:
+        outer, sweep = 0, (1 if c > 0 else 0)
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">'
+        '<circle cx="24" cy="24" r="23" fill="#46556a"/>'
+        f'<path d="M24,1 A23,23 0 0 {outer} 24,47 A{rx * 23 / 24:.2f},23 0 0 {sweep} 24,1 Z" fill="#fddf47"/>'
+        '<circle cx="24" cy="24" r="23" fill="none" stroke="#46556a" stroke-width="1"/>'
+        '</svg>'
+    )
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+
+
+def get_moonphase_filepath(image_repo = './'):
+    lunation = get_lunation_fraction() * 29.530588853
     # round() (not floor/int) so each of the 8 phase buckets is centered on
     # its canonical instant (e.g. "full_moon" spans the ~3.7 days around
     # 100% illumination) instead of starting there - otherwise the days
@@ -1259,6 +1288,77 @@ def get_moonphase_filepath(image_repo = './'):
     filepath = os.path.join(image_repo, f"{phases[phase_index]}.png")
 
     return filepath, phase_index, illumination_pct
+
+
+_DAY_LENGTH_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">'
+    '<g stroke="#f5a623" stroke-width="3" stroke-linecap="round">'
+    '<line x1="24" y1="3" x2="24" y2="9"/><line x1="24" y1="39" x2="24" y2="45"/>'
+    '<line x1="3" y1="24" x2="9" y2="24"/><line x1="39" y1="24" x2="45" y2="24"/>'
+    '<line x1="9.2" y1="9.2" x2="13.4" y2="13.4"/><line x1="34.6" y1="34.6" x2="38.8" y2="38.8"/>'
+    '<line x1="9.2" y1="38.8" x2="13.4" y2="34.6"/><line x1="34.6" y1="13.4" x2="38.8" y2="9.2"/>'
+    '</g><circle cx="24" cy="24" r="9" fill="#fbbf24"/></svg>'
+)
+
+
+def _img_data_uri(path):
+    with open(path, "rb") as f:
+        return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+
+
+def render_sun_moon_cards_html(asset_path):
+    """
+    One row of cards: sunrise, highest point, day length, sunset, moonrise,
+    moonset, moon phase. Returns a single-line HTML string (multi-line / indented
+    HTML gets parsed as a markdown code block by st.markdown).
+    """
+    sunrise_str, sunset_str = get_sunrise_sunset()
+    noon_str = get_solar_noon()
+    day_len_str, day_len_delta = get_day_length()
+    moonrise_str, moonset_str = get_moonrise_moonset()
+    illumination_pct = (1 - np.cos(2 * np.pi * get_lunation_fraction())) / 2 * 100
+    moon_pct_str = f"{illumination_pct:.1f}".replace(".", ",") + "%"
+
+    day_len_icon = "data:image/svg+xml;base64," + base64.b64encode(_DAY_LENGTH_SVG.encode()).decode()
+
+    sun_cards = [
+        (_img_data_uri(os.path.join(asset_path, "sunrise.png")), "Zon op", sunrise_str, ""),
+        (_img_data_uri(os.path.join(asset_path, "solar_noon.png")), "Hoogste punt", noon_str, ""),
+        (day_len_icon, "Daglengte", day_len_str, f"{day_len_delta}"),
+        (_img_data_uri(os.path.join(asset_path, "sunset.png")), "Zon onder", sunset_str, ""),
+    ]
+    moon_cards = [
+        (_img_data_uri(os.path.join(asset_path, "moonrise.png")), "Maan op", moonrise_str, ""),
+        (_img_data_uri(os.path.join(asset_path, "moonset.png")), "Maan onder", moonset_str, ""),
+        (moon_phase_svg_uri(get_lunation_fraction()), "Maanfase", moon_pct_str, ""),
+    ]
+
+    css = (
+        "<style>"
+        ".sm-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0.5rem 0 0.75rem 0;}"
+        "@media (max-width:700px){.sm-row{grid-template-columns:repeat(2,1fr);}}"
+        ".sm-card{display:flex;align-items:center;gap:14px;padding:14px 16px;background:#ffffff;"
+        "border:1px solid #ecebe3;border-radius:12px;box-shadow:0 1px 3px rgba(61,58,42,0.08);}"
+        ".sm-card img{width:36px;height:36px;object-fit:contain;flex:none;}"
+        ".sm-label{font-size:0.8rem;color:#8a8878;line-height:1.2;}"
+        ".sm-value{font-size:1.15rem;font-weight:500;color:#3d3a2a;line-height:1.3;}"
+        ".sm-sub{font-size:0.75rem;line-height:1.2;}"
+        ".sm-up{color:#2e7d32;}.sm-down{color:#c62828;}"
+        "</style>"
+    )
+    def _row(cards):
+        inner = "".join(
+            f'<div class="sm-card"><img src="{icon}"/>'
+            f'<div><div class="sm-label">{label}</div><div class="sm-value">{value}</div>'
+            + (f'<div class="sm-sub {"sm-up" if sub.startswith("+") else "sm-down"}">{sub}</div>' if sub else "")
+            + '</div></div>'
+            for icon, label, value, sub in cards
+        )
+        return f'<div class="sm-row">{inner}</div>'
+
+    # sun on the first row, moon on the second
+    return css + _row(sun_cards) + _row(moon_cards)
+
 
 def plot_data(df, 
               y_variable_colname, 

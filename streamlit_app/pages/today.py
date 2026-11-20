@@ -88,7 +88,11 @@ with col3:
     icon_col, text_col = st.columns([1, 3])
     with icon_col:
         moonphase_image_filepath, index, illumination_pct = utils.get_moonphase_filepath(image_repo=asset_path)
-        st.image(moonphase_image_filepath, width=50)
+        # PNGs per phase are wrong (e.g. full_moon.png half dark) -> draw SVG from real phase
+        st.markdown(
+            f'<img src="{utils.moon_phase_svg_uri(utils.get_lunation_fraction())}" width="50"/>',
+            unsafe_allow_html=True,
+        )
     with text_col:
         st.markdown(f"**Moon**<br> {index}/8 ({illumination_pct:.0f}% illuminated)", unsafe_allow_html=True)
 
