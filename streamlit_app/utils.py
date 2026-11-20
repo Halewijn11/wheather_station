@@ -1023,6 +1023,36 @@ def get_solar_noon(latitude=50.924503, longitude=4.112950):
     return solar_noon_str
 
 
+def get_day_length(latitude=50.924503, longitude=4.112950):
+    """
+    Day length (sunrise -> sunset) for today, plus change vs yesterday.
+    Returns (length_str "Xu YYm", delta_str "+Xm YYs" / "-Xm YYs").
+    """
+    city = LocationInfo(
+        name="Affligem",
+        region="Belgium",
+        timezone="Europe/Brussels",
+        latitude=latitude,
+        longitude=longitude
+    )
+
+    def _length(d):
+        s = sun(city.observer, date=d, tzinfo=city.timezone)
+        return s["sunset"] - s["sunrise"]
+
+    today_len = _length(date.today())
+    yesterday_len = _length(date.today() - timedelta(days=1))
+
+    total_min = int(round(today_len.total_seconds() / 60))
+    length_str = f"{total_min // 60}u {total_min % 60:02d}m"
+
+    delta_s = int(round((today_len - yesterday_len).total_seconds()))
+    sign = "+" if delta_s >= 0 else "-"
+    delta_str = f"{sign}{abs(delta_s) // 60}m {abs(delta_s) % 60:02d}s"
+
+    return length_str, delta_str
+
+
 # --- TOA (top-of-atmosphere) solar irradiance -------------------------------
 # Spencer (1971) approximations for solar declination and the earth-sun
 # distance (eccentricity) correction. This is the theoretical clear-sky

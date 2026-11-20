@@ -79,6 +79,17 @@ if refresh_clicked:
         pass
     st.success("Data refreshed!")
 
+# #--------------------- sunrise / sunset / highest point / day length -----------------------------
+sunrise_str, sunset_str = utils.get_sunrise_sunset()
+solar_noon_str = utils.get_solar_noon()
+day_length_str, day_length_delta = utils.get_day_length()
+
+sun_c1, sun_c2, sun_c3, sun_c4 = st.columns(4)
+sun_c1.metric("Sunrise", sunrise_str)
+sun_c2.metric("Highest point", solar_noon_str)
+sun_c3.metric("Sunset", sunset_str)
+sun_c4.metric("Day length", day_length_str, delta=f"{day_length_delta} vs yesterday")
+
 
 # Create the dropdown (selectbox)
 selected_label = utils.get_shared_time_range_selection("Select Time Range:", df=df)
