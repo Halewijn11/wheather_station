@@ -60,6 +60,9 @@ else:
     monthly_counts = pd.Series(dtype=int)
     sensor_years = set()
 
+# --- Rain radar: link only (Weeronline blocks embedding via X-Frame-Options: DENY) ---
+st.link_button("Regenradar (Weeronline)", "https://www.weeronline.nl/regenradar/Belgie/131")
+
 # --- Daily rainfall bar chart (live sensor years only; historical data is monthly-only) ---
 st.subheader("Regenval per dag")
 if not sensor_years:
