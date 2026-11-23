@@ -2485,5 +2485,131 @@ def transform_to_radial_cartesian(df, time_col, degree_col):
     # x = r * sin(theta), y = r * cos(theta)
     df['x_radial'] = df['r'] * np.sin(rad)
     df['y_radial'] = df['r'] * np.cos(rad)
-    
+
     return df[['x_radial', 'y_radial']]
+
+
+# ---------------------------------------------------------------------------
+# Hourly wind chart (avg wind + gusts per hour, direction arrows underneath)
+# ---------------------------------------------------------------------------
+_COMPASS_NL = ['N', 'NNO', 'NO', 'ONO', 'O', 'OZO', 'ZO', 'ZZO',
+               'Z', 'ZZW', 'ZW', 'WZW', 'W', 'WNW', 'NW', 'NNW']
+
+
+def build_hourly_wind_data(df, hours=24, min_gust_for_direction=2.0):
+    """
+    One row per hour for the last `hours` hours (+ current partial hour):
+    avg wind (mean of avg), gust (max of max), and dominant direction
+    (speed-weighted circular mean; NaN if calm). Hours with no data are
+    kept as NaN rows so the line shows a gap instead of bridging it.
+    Hour buckets are cut in UTC (same boundaries as Brussels, no DST
+    ambiguity); `hour_label` is the Brussels-local hour.
+    """
+    tz = pytz.timezone('Europe/Brussels')
+    now_hour = pd.Timestamp.now(tz='UTC').floor('h')
+    start = now_hour - pd.Timedelta(hours=hours)
+    full_idx = pd.date_range(start, now_hour, freq='h')
+
+    cols = ['received_at', 'wind_speed_kmh_avg', 'wind_speed_kmh_max', 'wind_direction']
+    work = df[cols].dropna(subset=['received_at']).copy()
+    work['hour'] = work['received_at'].dt.floor('h')
+    work = work[work['hour'] >= start]
+
+    weight = work['wind_speed_kmh_avg'].fillna(0)
+    rad = np.deg2rad(work['wind_direction'])
+    work['sin_w'] = weight * np.sin(rad)
+    work['cos_w'] = weight * np.cos(rad)
+    work['w'] = weight.where(work['wind_direction'].notna(), 0)
+
+    g = work.groupby('hour').agg(
+        wind=('wind_speed_kmh_avg', 'mean'),
+        gust=('wind_speed_kmh_max', 'max'),
+        sin_w=('sin_w', 'sum'), cos_w=('cos_w', 'sum'), w=('w', 'sum'),
+    ).reindex(full_idx)
+
+    direction = np.degrees(np.arctan2(g['sin_w'], g['cos_w'])) % 360
+    direction = direction.where((g['w'] > 0) & (g['gust'] >= min_gust_for_direction))
+    out = pd.DataFrame({
+        'i': range(len(g)),
+        'wind': g['wind'].values,
+        'gust': g['gust'].values,
+        'direction': direction.values,
+    })
+    local = g.index.tz_convert(tz)
+    out['hour_label'] = [f"{t.day}/{t.month}" if t.hour == 0 else f"{t.hour}u" for t in local]
+    out['is_midnight'] = np.asarray(local.hour == 0)
+    out['compass'] = out['direction'].apply(
+        lambda d: _COMPASS_NL[int(round(d / 22.5)) % 16] if pd.notna(d) else None)
+    return out
+
+
+def render_hourly_wind_chart(hourly, height=340):
+    """Line chart: avg wind + gusts with value labels; wind arrows (pointing
+    downwind), compass letters and hour labels below the zero line."""
+    n = len(hourly)
+    top = float(np.nanmax(hourly['gust'])) if hourly['gust'].notna().any() else 10.0
+    ymax = max(10.0, np.ceil(top / 10) * 10)
+    u = ymax / 8
+    y_arrow, y_compass, y_hour = -1.0 * u, -2.2 * u, -3.3 * u
+    y_scale = alt.Scale(domain=[-4.0 * u, ymax + 0.6 * u], nice=False)
+    x_scale = alt.Scale(domain=[-0.6, n - 0.4])
+    step = 5 if ymax <= 20 else 10
+    ticks = [float(t) for t in np.arange(0, ymax + 0.1, step)]
+
+    long = hourly.melt(id_vars=['i', 'hour_label'], value_vars=['wind', 'gust'],
+                       var_name='series', value_name='value').dropna(subset=['value'])
+    long['series'] = long['series'].map({'wind': 'Wind', 'gust': 'Rukwind'})
+    colors = alt.Scale(domain=['Wind', 'Rukwind'], range=['#6FB1EA', '#1E1B6B'])
+
+    x = alt.X('i:Q', scale=x_scale, axis=None)
+    # Same axis config on every y-encoding: in a layered chart, axis=None on any
+    # layer would suppress the axis for all of them.
+    y_axis = alt.Axis(values=ticks, title='km/h', grid=True, gridColor='#E5E7EB',
+                      domain=False, ticks=False)
+    base = alt.Chart(long)
+    lines = base.mark_line(interpolate='monotone', strokeWidth=2.5).encode(
+        x=x,
+        y=alt.Y('value:Q', scale=y_scale, axis=y_axis),
+        color=alt.Color('series:N', scale=colors,
+                        legend=alt.Legend(orient='bottom', title=None, symbolType='circle')),
+    )
+    points = base.mark_point(filled=True, size=45, opacity=1).encode(
+        x=x, y=alt.Y('value:Q', scale=y_scale, axis=y_axis),
+        color=alt.Color('series:N', scale=colors, legend=None),
+        tooltip=[alt.Tooltip('hour_label:N', title='Uur'),
+                 alt.Tooltip('series:N', title=''),
+                 alt.Tooltip('value:Q', title='km/h', format='.1f')],
+    )
+
+    def value_labels(series, dy):
+        return base.transform_filter(alt.datum.series == series).mark_text(
+            dy=dy, fontSize=11, fontWeight='bold',
+        ).encode(x=x, y=alt.Y('value:Q', scale=y_scale, axis=y_axis),
+                 text=alt.Text('value:Q', format='.0f'),
+                 color=alt.Color('series:N', scale=colors, legend=None))
+
+    zero = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(color='#9CA3AF').encode(
+        y=alt.Y('y:Q', scale=y_scale, axis=y_axis))
+
+    dir_df = hourly.dropna(subset=['direction']).copy()
+    dir_df['angle'] = (dir_df['direction'] + 180) % 360  # arrow points where the wind blows TO
+    dir_df['y_arrow'], dir_df['y_compass'] = y_arrow, y_compass
+    arrows = alt.Chart(dir_df).mark_point(shape='arrow', filled=True, size=130, color='#374151').encode(
+        x=x, y=alt.Y('y_arrow:Q', scale=y_scale, axis=y_axis),
+        angle=alt.Angle('angle:Q', scale=alt.Scale(domain=[0, 360], range=[0, 360]), legend=None),
+        tooltip=[alt.Tooltip('hour_label:N', title='Uur'),
+                 alt.Tooltip('compass:N', title='Richting'),
+                 alt.Tooltip('direction:Q', title='Graden', format='.0f')],
+    )
+    compass = alt.Chart(dir_df).mark_text(fontSize=10, color='#374151').encode(
+        x=x, y=alt.Y('y_compass:Q', scale=y_scale, axis=y_axis), text='compass:N')
+
+    hour_df = hourly.copy()
+    hour_df['y_hour'] = y_hour
+    hour_df['lbl_color'] = np.where(hour_df['is_midnight'], '#2563EB', '#6B7280')
+    hour_labels = alt.Chart(hour_df).mark_text(fontSize=10).encode(
+        x=x, y=alt.Y('y_hour:Q', scale=y_scale, axis=y_axis), text='hour_label:N',
+        color=alt.Color('lbl_color:N', scale=None, legend=None))
+
+    return alt.layer(lines, zero, points, value_labels('Rukwind', -10), value_labels('Wind', 14),
+                     arrows, compass, hour_labels).properties(height=height, width='container')

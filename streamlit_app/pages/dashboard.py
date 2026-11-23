@@ -572,6 +572,14 @@ with rain_col2:
 #     ).properties(height=100)
 #     st.altair_chart(spark, use_container_width=True)
 
+#  #--------------------- hourly wind chart (last 24h) -----------------------------
+st.subheader("Wind per uur (laatste 24 uur)")
+_hourly_wind = utils.build_hourly_wind_data(df)
+if _hourly_wind[['wind', 'gust']].notna().any().any():
+    st.altair_chart(utils.render_hourly_wind_chart(_hourly_wind), use_container_width=True)
+else:
+    st.warning("No data for Wind")
+
 st.markdown(
     """
     <style>
