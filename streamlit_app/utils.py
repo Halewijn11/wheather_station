@@ -2503,7 +2503,7 @@ def build_hourly_wind_data(df, hours=24, min_gust_for_direction=2.0):
     (speed-weighted circular mean; NaN if calm). Hours with no data are
     kept as NaN rows so the line shows a gap instead of bridging it.
     Hour buckets are cut in UTC (same boundaries as Brussels, no DST
-    ambiguity); `hour_label` is the Brussels-local hour.
+    ambiguity); `hour_label` is the Brussels-local END of the bucket.
     """
     tz = pytz.timezone('Europe/Brussels')
     now_hour = pd.Timestamp.now(tz='UTC').floor('h')
@@ -2535,7 +2535,9 @@ def build_hourly_wind_data(df, hours=24, min_gust_for_direction=2.0):
         'gust': g['gust'].values,
         'direction': direction.values,
     })
-    local = g.index.tz_convert(tz)
+    # Label = END of the hour bucket ("14u" = 13:00-13:59), so the date label
+    # at "0u" marks the bucket that closed at midnight.
+    local = (g.index + pd.Timedelta(hours=1)).tz_convert(tz)
     out['hour_label'] = [f"{t.day}/{t.month}" if t.hour == 0 else f"{t.hour}u" for t in local]
     out['is_midnight'] = np.asarray(local.hour == 0)
     out['compass'] = out['direction'].apply(
