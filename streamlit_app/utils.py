@@ -2498,7 +2498,7 @@ _COMPASS_NL = ['N', 'NNO', 'NO', 'ONO', 'O', 'OZO', 'ZO', 'ZZO',
 
 def build_hourly_wind_data(df, hours=24, min_gust_for_direction=2.0):
     """
-    One row per hour for the last `hours` hours (+ current partial hour):
+    One row per COMPLETE hour for the last `hours` hours (running hour is left out):
     avg wind (mean of avg), gust (max of max), and dominant direction
     (speed-weighted circular mean; NaN if calm). Hours with no data are
     kept as NaN rows so the line shows a gap instead of bridging it.
@@ -2508,12 +2508,12 @@ def build_hourly_wind_data(df, hours=24, min_gust_for_direction=2.0):
     tz = pytz.timezone('Europe/Brussels')
     now_hour = pd.Timestamp.now(tz='UTC').floor('h')
     start = now_hour - pd.Timedelta(hours=hours)
-    full_idx = pd.date_range(start, now_hour, freq='h')
+    full_idx = pd.date_range(start, now_hour - pd.Timedelta(hours=1), freq='h')  # complete hours only
 
     cols = ['received_at', 'wind_speed_kmh_avg', 'wind_speed_kmh_max', 'wind_direction']
     work = df[cols].dropna(subset=['received_at']).copy()
     work['hour'] = work['received_at'].dt.floor('h')
-    work = work[work['hour'] >= start]
+    work = work[(work['hour'] >= start) & (work['hour'] < now_hour)]
 
     weight = work['wind_speed_kmh_avg'].fillna(0)
     rad = np.deg2rad(work['wind_direction'])
