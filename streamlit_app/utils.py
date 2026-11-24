@@ -1235,6 +1235,13 @@ def get_lunation_fraction():
     return (days % 29.530588853) / 29.530588853
 
 
+def is_moon_waxing(fraction=None):
+    """True while the illuminated part grows (new moon -> full moon)."""
+    if fraction is None:
+        fraction = get_lunation_fraction()
+    return fraction < 0.5
+
+
 def moon_phase_svg_uri(fraction):
     """
     Data-URI SVG of the moon at lunation `fraction` (0..1), northern hemisphere
@@ -1330,7 +1337,8 @@ def render_sun_moon_cards_html(asset_path):
     moon_cards = [
         (_img_data_uri(os.path.join(asset_path, "moonrise.png")), "Maan op", moonrise_str, ""),
         (_img_data_uri(os.path.join(asset_path, "moonset.png")), "Maan onder", moonset_str, ""),
-        (moon_phase_svg_uri(get_lunation_fraction()), "Maanfase", moon_pct_str, ""),
+        (moon_phase_svg_uri(get_lunation_fraction()), "Maanfase", moon_pct_str,
+         "▲ Toenemend" if is_moon_waxing() else "▼ Afnemend"),
     ]
 
     css = (
@@ -1343,14 +1351,14 @@ def render_sun_moon_cards_html(asset_path):
         ".sm-label{font-size:0.8rem;color:#8a8878;line-height:1.2;}"
         ".sm-value{font-size:1.15rem;font-weight:500;color:#3d3a2a;line-height:1.3;}"
         ".sm-sub{font-size:0.75rem;line-height:1.2;}"
-        ".sm-up{color:#2e7d32;}.sm-down{color:#c62828;}"
+        ".sm-up{color:#2e7d32;}.sm-down{color:#c62828;}.sm-neutral{color:#8a8878;}"
         "</style>"
     )
     def _row(cards):
         inner = "".join(
             f'<div class="sm-card"><img src="{icon}"/>'
             f'<div><div class="sm-label">{label}</div><div class="sm-value">{value}</div>'
-            + (f'<div class="sm-sub {"sm-up" if sub.startswith("+") else "sm-down"}">{sub}</div>' if sub else "")
+            + (f'<div class="sm-sub {"sm-neutral" if sub[0] in "▲▼" else ("sm-up" if sub.startswith("+") else "sm-down")}">{sub}</div>' if sub else "")
             + '</div></div>'
             for icon, label, value, sub in cards
         )

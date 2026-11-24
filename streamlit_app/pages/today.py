@@ -94,7 +94,7 @@ with col3:
             unsafe_allow_html=True,
         )
     with text_col:
-        st.markdown(f"**Moon**<br> {index}/8 ({illumination_pct:.0f}% illuminated)", unsafe_allow_html=True)
+        st.markdown(f"**Moon**<br> {index}/8 ({illumination_pct:.0f}% illuminated, {'waxing' if utils.is_moon_waxing() else 'waning'})", unsafe_allow_html=True)
 
 filtered_df = utils.filter_by_recency(df, window_label="Since Midnight", mode='last_session')
 
