@@ -579,8 +579,7 @@ if filtered_df.empty:
 else:
     _wind_buckets = utils.build_wind_bucket_data(
         df, filtered_df['received_at'].min(), filtered_df['received_at'].max())
-    _bucket_name = utils._BUCKET_NAME_NL[_wind_buckets.attrs.get('bucket_kind', '1h')]
-    st.subheader(f"Wind {_bucket_name} ({selected_label})")
+    st.subheader("Wind")
     if _wind_buckets.empty or not _wind_buckets[['wind', 'gust']].notna().any().any():
         st.info("Nog geen volledige periode met data in deze tijdsspanne.")
     else:

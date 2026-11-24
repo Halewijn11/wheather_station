@@ -2498,7 +2498,6 @@ _COMPASS_NL = ['N', 'NNO', 'NO', 'ONO', 'O', 'OZO', 'ZO', 'ZZO',
 
 _BUCKET_STEP = {'1h': pd.Timedelta(hours=1), '6h': pd.Timedelta(hours=6),
                 'D': pd.Timedelta(days=1), 'W': pd.Timedelta(days=7)}
-_BUCKET_NAME_NL = {'1h': 'per uur', '6h': 'per 6 uur', 'D': 'per dag', 'W': 'per week'}
 
 
 def _wind_bucket_kind(span):
