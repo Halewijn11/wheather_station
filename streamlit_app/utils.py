@@ -2612,16 +2612,16 @@ def render_hourly_wind_chart(hourly, height=340):
     top = float(np.nanmax(hourly['gust'])) if hourly['gust'].notna().any() else 10.0
     ymax = max(10.0, np.ceil(top / 10) * 10)
     u = ymax / 8
-    y_arrow, y_hour = -1.0 * u, -2.3 * u
-    y_scale = alt.Scale(domain=[-3.0 * u, ymax + 0.6 * u], nice=False)
+    y_arrow, y_hour = -1.0 * u, -1.9 * u
+    y_scale = alt.Scale(domain=[-2.6 * u, ymax + 0.6 * u], nice=False)
     x_scale = alt.Scale(domain=[-0.6, n - 0.4])
     step = 5 if ymax <= 20 else 10
     ticks = [float(t) for t in np.arange(0, ymax + 0.1, step)]
 
     long = hourly.melt(id_vars=['i', 'hour_label'], value_vars=['wind', 'gust'],
                        var_name='series', value_name='value').dropna(subset=['value'])
-    long['series'] = long['series'].map({'wind': 'Wind', 'gust': 'Rukwind'})
-    colors = alt.Scale(domain=['Wind', 'Rukwind'], range=['#6FB1EA', '#1E1B6B'])
+    long['series'] = long['series'].map({'wind': 'Wind', 'gust': 'Max wind'})
+    colors = alt.Scale(domain=['Wind', 'Max wind'], range=['#6FB1EA', '#1E1B6B'])
 
     x = alt.X('i:Q', scale=x_scale, axis=None)
     # Same axis config on every y-encoding: in a layered chart, axis=None on any
@@ -2676,6 +2676,6 @@ def render_hourly_wind_chart(hourly, height=340):
 
     layers = [lines, zero, points]
     if not dense:
-        layers += [value_labels('Rukwind', -10), value_labels('Wind', 14)]
+        layers += [value_labels('Max wind', -10), value_labels('Wind', 14)]
     layers += [arrows, hour_labels]
     return alt.layer(*layers).properties(height=height, width='container')
