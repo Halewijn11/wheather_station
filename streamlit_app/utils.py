@@ -2607,13 +2607,13 @@ def build_wind_bucket_data(df, range_start, range_end, min_gust_for_direction=2.
 
 def render_hourly_wind_chart(hourly, height=340):
     """Line chart: avg wind + gusts with value labels; wind arrows (pointing
-    downwind), compass letters and hour labels below the zero line."""
+    downwind; compass letter only in the tooltip) and hour labels below the zero line."""
     n = len(hourly)
     top = float(np.nanmax(hourly['gust'])) if hourly['gust'].notna().any() else 10.0
     ymax = max(10.0, np.ceil(top / 10) * 10)
     u = ymax / 8
-    y_arrow, y_compass, y_hour = -1.0 * u, -2.2 * u, -3.3 * u
-    y_scale = alt.Scale(domain=[-4.0 * u, ymax + 0.6 * u], nice=False)
+    y_arrow, y_hour = -1.0 * u, -2.3 * u
+    y_scale = alt.Scale(domain=[-3.0 * u, ymax + 0.6 * u], nice=False)
     x_scale = alt.Scale(domain=[-0.6, n - 0.4])
     step = 5 if ymax <= 20 else 10
     ticks = [float(t) for t in np.arange(0, ymax + 0.1, step)]
@@ -2635,7 +2635,7 @@ def render_hourly_wind_chart(hourly, height=340):
         color=alt.Color('series:N', scale=colors,
                         legend=alt.Legend(orient='bottom', title=None, symbolType='circle')),
     )
-    dense = n > 32  # many buckets: drop value labels + compass letters, shrink markers
+    dense = n > 32  # many buckets: drop value labels, shrink markers
     points = base.mark_point(filled=True, size=20 if dense else 45, opacity=1).encode(
         x=x, y=alt.Y('value:Q', scale=y_scale, axis=y_axis),
         color=alt.Color('series:N', scale=colors, legend=None),
@@ -2656,16 +2656,16 @@ def render_hourly_wind_chart(hourly, height=340):
 
     dir_df = hourly.dropna(subset=['direction']).copy()
     dir_df['angle'] = (dir_df['direction'] + 180) % 360  # arrow points where the wind blows TO
-    dir_df['y_arrow'], dir_df['y_compass'] = y_arrow, y_compass
-    arrows = alt.Chart(dir_df).mark_point(shape='arrow', filled=True, size=60 if dense else 130, color='#374151').encode(
+    dir_df['y_arrow'] = y_arrow
+    # Dart-shaped arrowhead (tip up at angle 0, notched tail), like KMI-style wind arrows.
+    dart = "M0,-1L0.7,0.9L0,0.45L-0.7,0.9Z"
+    arrows = alt.Chart(dir_df).mark_point(shape=dart, filled=True, size=90 if dense else 220, color='#374151').encode(
         x=x, y=alt.Y('y_arrow:Q', scale=y_scale, axis=y_axis),
         angle=alt.Angle('angle:Q', scale=alt.Scale(domain=[0, 360], range=[0, 360]), legend=None),
         tooltip=[alt.Tooltip('hour_label:N', title='Periode'),
                  alt.Tooltip('compass:N', title='Richting'),
                  alt.Tooltip('direction:Q', title='Graden', format='.0f')],
     )
-    compass = alt.Chart(dir_df).mark_text(fontSize=10, color='#374151').encode(
-        x=x, y=alt.Y('y_compass:Q', scale=y_scale, axis=y_axis), text='compass:N')
 
     hour_df = hourly[hourly['show_label']].copy()
     hour_df['y_hour'] = y_hour
@@ -2677,8 +2677,5 @@ def render_hourly_wind_chart(hourly, height=340):
     layers = [lines, zero, points]
     if not dense:
         layers += [value_labels('Rukwind', -10), value_labels('Wind', 14)]
-    layers.append(arrows)
-    if not dense:
-        layers.append(compass)
-    layers.append(hour_labels)
+    layers += [arrows, hour_labels]
     return alt.layer(*layers).properties(height=height, width='container')
