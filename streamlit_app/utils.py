@@ -2504,12 +2504,15 @@ _COMPASS_NL = ['N', 'NNO', 'NO', 'ONO', 'O', 'OZO', 'ZO', 'ZZO',
                'Z', 'ZZW', 'ZW', 'WZW', 'W', 'WNW', 'NW', 'NNW']
 
 
-_BUCKET_STEP = {'1h': pd.Timedelta(hours=1), '6h': pd.Timedelta(hours=6),
-                'D': pd.Timedelta(days=1), 'W': pd.Timedelta(days=7)}
+_BUCKET_STEP = {'30m': pd.Timedelta(minutes=30), '1h': pd.Timedelta(hours=1),
+                '6h': pd.Timedelta(hours=6), 'D': pd.Timedelta(days=1), 'W': pd.Timedelta(days=7)}
+_UTC_BUCKET_KINDS = ('30m', '1h')  # cut in UTC: boundaries equal Brussels, no DST ambiguity
 
 
 def _wind_bucket_kind(span):
     """Bucket size so the chart keeps at most ~50 points for the selected range."""
+    if span <= pd.Timedelta(hours=24):
+        return '30m'
     if span <= pd.Timedelta(hours=48):
         return '1h'
     if span <= pd.Timedelta(days=7, hours=1):
@@ -2521,6 +2524,8 @@ def _wind_bucket_kind(span):
 
 def _floor_bucket(ts, kind):
     """Floor a datetime Series to the bucket start (weeks start on Monday)."""
+    if kind == '30m':
+        return ts.dt.floor('30min')
     if kind == '1h':
         return ts.dt.floor('h')
     if kind == '6h':
@@ -2537,7 +2542,7 @@ def build_wind_bucket_data(df, range_start, range_end, min_gust_for_direction=2.
     Per bucket: avg wind (mean of avg), gust (max of max), and dominant
     direction (speed-weighted circular mean; NaN if calm). Buckets with no
     data stay as NaN rows so the line shows a gap instead of bridging it.
-    1h buckets are cut in UTC (same boundaries as Brussels, no DST
+    30-min / 1h buckets are cut in UTC (same boundaries as Brussels, no DST
     ambiguity); coarser buckets in Brussels wall-clock time. Data comes from
     the full df, so the first bucket is complete even if the range starts
     mid-bucket.
@@ -2552,7 +2557,7 @@ def build_wind_bucket_data(df, range_start, range_end, min_gust_for_direction=2.
     def floor_one(t):
         return _floor_bucket(pd.Series([t]), kind).iloc[0]
 
-    if kind == '1h':
+    if kind in _UTC_BUCKET_KINDS:
         ts = work['received_at']
         r_start, r_end = pd.Timestamp(range_start), pd.Timestamp(range_end)
         now_t = pd.Timestamp.now(tz='UTC')
@@ -2594,21 +2599,28 @@ def build_wind_bucket_data(df, range_start, range_end, min_gust_for_direction=2.
         'gust': g['gust'].values,
         'direction': direction.values,
     })
-    if kind in ('1h', '6h'):
+    if kind in ('30m', '1h', '6h'):
         # Label = END of the bucket ("14u" = 13:00-13:59), so the date label
-        # at "0u" marks the bucket that closed at midnight.
+        # at "0u" marks the bucket that closed at midnight. 30-min buckets
+        # ending on the half hour are labelled "13:30" (tooltip only).
         end_t = g.index + step
-        local = end_t.tz_convert(tz) if kind == '1h' else end_t
-        out['hour_label'] = [f"{t.day}/{t.month}" if t.hour == 0 else f"{t.hour}u" for t in local]
-        out['is_midnight'] = np.asarray(local.hour == 0)
+        local = end_t.tz_convert(tz) if kind in _UTC_BUCKET_KINDS else end_t
+        out['hour_label'] = [
+            f"{t.day}/{t.month}" if (t.hour == 0 and t.minute == 0)
+            else (f"{t.hour}u" if t.minute == 0 else f"{t.hour}:{t.minute:02d}")
+            for t in local]
+        out['is_midnight'] = np.asarray((local.hour == 0) & (local.minute == 0))
     else:  # day / week buckets: label = start date of the bucket
         out['hour_label'] = [f"{t.day}/{t.month}" for t in g.index]
         out['is_midnight'] = False
     out['compass'] = out['direction'].apply(
         lambda d: _COMPASS_NL[int(round(d / 22.5)) % 16] if pd.notna(d) else None)
     # Thin out x labels when there are many buckets so they don't overlap.
-    label_every = max(1, int(np.ceil(len(out) / 26)))
-    out['show_label'] = (out['i'] % label_every) == 0
+    if kind == '30m':  # x labels only on the full hours
+        out['show_label'] = np.asarray(local.minute == 0)
+    else:
+        label_every = max(1, int(np.ceil(len(out) / 26)))
+        out['show_label'] = (out['i'] % label_every) == 0
     out.attrs['bucket_kind'] = kind
     return out
 
