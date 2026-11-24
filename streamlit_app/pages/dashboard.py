@@ -573,12 +573,18 @@ with rain_col2:
 #     st.altair_chart(spark, use_container_width=True)
 
 #  #--------------------- hourly wind chart (last 24h) -----------------------------
-st.subheader("Wind per uur (laatste 24 uur)")
-_hourly_wind = utils.build_hourly_wind_data(df)
-if _hourly_wind[['wind', 'gust']].notna().any().any():
-    st.altair_chart(utils.render_hourly_wind_chart(_hourly_wind), use_container_width=True)
-else:
+if filtered_df.empty:
+    st.subheader("Wind")
     st.warning("No data for Wind")
+else:
+    _wind_buckets = utils.build_wind_bucket_data(
+        df, filtered_df['received_at'].min(), filtered_df['received_at'].max())
+    _bucket_name = utils._BUCKET_NAME_NL[_wind_buckets.attrs.get('bucket_kind', '1h')]
+    st.subheader(f"Wind {_bucket_name} ({selected_label})")
+    if _wind_buckets.empty or not _wind_buckets[['wind', 'gust']].notna().any().any():
+        st.info("Nog geen volledige periode met data in deze tijdsspanne.")
+    else:
+        st.altair_chart(utils.render_hourly_wind_chart(_wind_buckets), use_container_width=True)
 
 st.markdown(
     """

@@ -2496,24 +2496,76 @@ _COMPASS_NL = ['N', 'NNO', 'NO', 'ONO', 'O', 'OZO', 'ZO', 'ZZO',
                'Z', 'ZZW', 'ZW', 'WZW', 'W', 'WNW', 'NW', 'NNW']
 
 
-def build_hourly_wind_data(df, hours=24, min_gust_for_direction=2.0):
+_BUCKET_STEP = {'1h': pd.Timedelta(hours=1), '6h': pd.Timedelta(hours=6),
+                'D': pd.Timedelta(days=1), 'W': pd.Timedelta(days=7)}
+_BUCKET_NAME_NL = {'1h': 'per uur', '6h': 'per 6 uur', 'D': 'per dag', 'W': 'per week'}
+
+
+def _wind_bucket_kind(span):
+    """Bucket size so the chart keeps at most ~50 points for the selected range."""
+    if span <= pd.Timedelta(hours=48):
+        return '1h'
+    if span <= pd.Timedelta(days=7, hours=1):
+        return '6h'
+    if span <= pd.Timedelta(days=45):
+        return 'D'
+    return 'W'
+
+
+def _floor_bucket(ts, kind):
+    """Floor a datetime Series to the bucket start (weeks start on Monday)."""
+    if kind == '1h':
+        return ts.dt.floor('h')
+    if kind == '6h':
+        return ts.dt.floor('6h')
+    day = ts.dt.normalize()
+    return day if kind == 'D' else day - pd.to_timedelta(ts.dt.weekday, unit='D')
+
+
+def build_wind_bucket_data(df, range_start, range_end, min_gust_for_direction=2.0):
     """
-    One row per COMPLETE hour for the last `hours` hours (running hour is left out):
-    avg wind (mean of avg), gust (max of max), and dominant direction
-    (speed-weighted circular mean; NaN if calm). Hours with no data are
-    kept as NaN rows so the line shows a gap instead of bridging it.
-    Hour buckets are cut in UTC (same boundaries as Brussels, no DST
-    ambiguity); `hour_label` is the Brussels-local END of the bucket.
+    One row per COMPLETE bucket between range_start and range_end (the
+    selected time range; the still-running bucket is left out). Bucket size
+    follows the span (see _wind_bucket_kind), stored in out.attrs['bucket_kind'].
+    Per bucket: avg wind (mean of avg), gust (max of max), and dominant
+    direction (speed-weighted circular mean; NaN if calm). Buckets with no
+    data stay as NaN rows so the line shows a gap instead of bridging it.
+    1h buckets are cut in UTC (same boundaries as Brussels, no DST
+    ambiguity); coarser buckets in Brussels wall-clock time. Data comes from
+    the full df, so the first bucket is complete even if the range starts
+    mid-bucket.
     """
     tz = pytz.timezone('Europe/Brussels')
-    now_hour = pd.Timestamp.now(tz='UTC').floor('h')
-    start = now_hour - pd.Timedelta(hours=hours)
-    full_idx = pd.date_range(start, now_hour - pd.Timedelta(hours=1), freq='h')  # complete hours only
+    kind = _wind_bucket_kind(pd.Timestamp(range_end) - pd.Timestamp(range_start))
+    step = _BUCKET_STEP[kind]
 
     cols = ['received_at', 'wind_speed_kmh_avg', 'wind_speed_kmh_max', 'wind_direction']
     work = df[cols].dropna(subset=['received_at']).copy()
-    work['hour'] = work['received_at'].dt.floor('h')
-    work = work[(work['hour'] >= start) & (work['hour'] < now_hour)]
+
+    def floor_one(t):
+        return _floor_bucket(pd.Series([t]), kind).iloc[0]
+
+    if kind == '1h':
+        ts = work['received_at']
+        r_start, r_end = pd.Timestamp(range_start), pd.Timestamp(range_end)
+        now_t = pd.Timestamp.now(tz='UTC')
+    else:
+        ts = work['received_at'].dt.tz_convert(tz).dt.tz_localize(None)
+        r_start = pd.Timestamp(range_start).tz_convert(tz).tz_localize(None)
+        r_end = pd.Timestamp(range_end).tz_convert(tz).tz_localize(None)
+        now_t = pd.Timestamp.now(tz=tz).tz_localize(None)
+
+    start_b = floor_one(r_start)
+    end_b = min(floor_one(r_end), floor_one(now_t) - step)  # complete buckets only
+    if end_b < start_b:
+        empty = pd.DataFrame(columns=['i', 'wind', 'gust', 'direction', 'hour_label',
+                                      'is_midnight', 'compass', 'show_label'])
+        empty.attrs['bucket_kind'] = kind
+        return empty
+    full_idx = pd.date_range(start_b, end_b, freq=step)
+
+    work['hour'] = _floor_bucket(ts, kind)
+    work = work[(work['hour'] >= start_b) & (work['hour'] <= end_b)]
 
     weight = work['wind_speed_kmh_avg'].fillna(0)
     rad = np.deg2rad(work['wind_direction'])
@@ -2535,13 +2587,22 @@ def build_hourly_wind_data(df, hours=24, min_gust_for_direction=2.0):
         'gust': g['gust'].values,
         'direction': direction.values,
     })
-    # Label = END of the hour bucket ("14u" = 13:00-13:59), so the date label
-    # at "0u" marks the bucket that closed at midnight.
-    local = (g.index + pd.Timedelta(hours=1)).tz_convert(tz)
-    out['hour_label'] = [f"{t.day}/{t.month}" if t.hour == 0 else f"{t.hour}u" for t in local]
-    out['is_midnight'] = np.asarray(local.hour == 0)
+    if kind in ('1h', '6h'):
+        # Label = END of the bucket ("14u" = 13:00-13:59), so the date label
+        # at "0u" marks the bucket that closed at midnight.
+        end_t = g.index + step
+        local = end_t.tz_convert(tz) if kind == '1h' else end_t
+        out['hour_label'] = [f"{t.day}/{t.month}" if t.hour == 0 else f"{t.hour}u" for t in local]
+        out['is_midnight'] = np.asarray(local.hour == 0)
+    else:  # day / week buckets: label = start date of the bucket
+        out['hour_label'] = [f"{t.day}/{t.month}" for t in g.index]
+        out['is_midnight'] = False
     out['compass'] = out['direction'].apply(
         lambda d: _COMPASS_NL[int(round(d / 22.5)) % 16] if pd.notna(d) else None)
+    # Thin out x labels when there are many buckets so they don't overlap.
+    label_every = max(1, int(np.ceil(len(out) / 26)))
+    out['show_label'] = (out['i'] % label_every) == 0
+    out.attrs['bucket_kind'] = kind
     return out
 
 
@@ -2575,10 +2636,11 @@ def render_hourly_wind_chart(hourly, height=340):
         color=alt.Color('series:N', scale=colors,
                         legend=alt.Legend(orient='bottom', title=None, symbolType='circle')),
     )
-    points = base.mark_point(filled=True, size=45, opacity=1).encode(
+    dense = n > 32  # many buckets: drop value labels + compass letters, shrink markers
+    points = base.mark_point(filled=True, size=20 if dense else 45, opacity=1).encode(
         x=x, y=alt.Y('value:Q', scale=y_scale, axis=y_axis),
         color=alt.Color('series:N', scale=colors, legend=None),
-        tooltip=[alt.Tooltip('hour_label:N', title='Uur'),
+        tooltip=[alt.Tooltip('hour_label:N', title='Periode'),
                  alt.Tooltip('series:N', title=''),
                  alt.Tooltip('value:Q', title='km/h', format='.1f')],
     )
@@ -2596,22 +2658,28 @@ def render_hourly_wind_chart(hourly, height=340):
     dir_df = hourly.dropna(subset=['direction']).copy()
     dir_df['angle'] = (dir_df['direction'] + 180) % 360  # arrow points where the wind blows TO
     dir_df['y_arrow'], dir_df['y_compass'] = y_arrow, y_compass
-    arrows = alt.Chart(dir_df).mark_point(shape='arrow', filled=True, size=130, color='#374151').encode(
+    arrows = alt.Chart(dir_df).mark_point(shape='arrow', filled=True, size=60 if dense else 130, color='#374151').encode(
         x=x, y=alt.Y('y_arrow:Q', scale=y_scale, axis=y_axis),
         angle=alt.Angle('angle:Q', scale=alt.Scale(domain=[0, 360], range=[0, 360]), legend=None),
-        tooltip=[alt.Tooltip('hour_label:N', title='Uur'),
+        tooltip=[alt.Tooltip('hour_label:N', title='Periode'),
                  alt.Tooltip('compass:N', title='Richting'),
                  alt.Tooltip('direction:Q', title='Graden', format='.0f')],
     )
     compass = alt.Chart(dir_df).mark_text(fontSize=10, color='#374151').encode(
         x=x, y=alt.Y('y_compass:Q', scale=y_scale, axis=y_axis), text='compass:N')
 
-    hour_df = hourly.copy()
+    hour_df = hourly[hourly['show_label']].copy()
     hour_df['y_hour'] = y_hour
     hour_df['lbl_color'] = np.where(hour_df['is_midnight'], '#2563EB', '#6B7280')
     hour_labels = alt.Chart(hour_df).mark_text(fontSize=10).encode(
         x=x, y=alt.Y('y_hour:Q', scale=y_scale, axis=y_axis), text='hour_label:N',
         color=alt.Color('lbl_color:N', scale=None, legend=None))
 
-    return alt.layer(lines, zero, points, value_labels('Rukwind', -10), value_labels('Wind', 14),
-                     arrows, compass, hour_labels).properties(height=height, width='container')
+    layers = [lines, zero, points]
+    if not dense:
+        layers += [value_labels('Rukwind', -10), value_labels('Wind', 14)]
+    layers.append(arrows)
+    if not dense:
+        layers.append(compass)
+    layers.append(hour_labels)
+    return alt.layer(*layers).properties(height=height, width='container')
