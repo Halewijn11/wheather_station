@@ -1228,11 +1228,25 @@ def get_battery_icon_filepath(percentage, image_repo = './', flat = False):
 
 
 def get_lunation_fraction():
-    """Position in the lunar cycle, 0 = new moon, 0.5 = full moon, back to 1 = new moon."""
-    # Reference New Moon (Jan 6, 2000)
-    diff = datetime.now() - datetime(2000, 1, 6, 18, 14)
-    days = diff.total_seconds() / 86400
-    return (days % 29.530588853) / 29.530588853
+    """
+    Position in the lunar cycle, 0 = new moon, 0.5 = full moon, back to 1 = new moon.
+    Equals the Moon-Sun elongation / 360 deg, so illumination = (1 - cos(2*pi*f)) / 2
+    and waxing = f < 0.5. Uses Meeus (Astronomical Algorithms, ch. 47/48) main
+    terms on UTC time - accurate to ~1% illumination, unlike a mean 29.53-day cycle
+    (off by up to ~8% and +-14 h) or naive local time. Location-independent.
+    """
+    now_utc = datetime.now(pytz.utc)
+    jd = now_utc.timestamp() / 86400 + 2440587.5
+    T = (jd - 2451545.0) / 36525
+    d = np.deg2rad
+    D = 297.8501921 + 445267.1114034 * T       # mean elongation
+    M = 357.5291092 + 35999.0502909 * T        # Sun mean anomaly
+    Mp = 134.9633964 + 477198.8675055 * T      # Moon mean anomaly
+    elongation = (D
+                  + 6.289 * np.sin(d(Mp)) - 2.100 * np.sin(d(M))
+                  + 1.274 * np.sin(d(2 * D - Mp)) + 0.658 * np.sin(d(2 * D))
+                  + 0.214 * np.sin(d(2 * Mp)) + 0.110 * np.sin(d(D)))
+    return (elongation % 360) / 360
 
 
 def is_moon_waxing(fraction=None):
